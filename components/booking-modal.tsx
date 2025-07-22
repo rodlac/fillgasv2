@@ -90,6 +90,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log("Fetching initial data...")
         const [clientsRes, servicesRes, couponsRes] = await Promise.all([
           fetch("/api/clients"),
           fetch("/api/services"),
@@ -99,6 +100,10 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
         const clientsData = await clientsRes.json()
         const servicesData = await servicesRes.json()
         const couponsData = await couponsRes.json()
+
+        console.log("Clients data:", clientsData)
+        console.log("Services data:", servicesData)
+        console.log("Coupons data:", couponsData)
 
         setClients(Array.isArray(clientsData) ? clientsData : clientsData.clients || [])
         setServices(Array.isArray(servicesData) ? servicesData : [])
@@ -223,6 +228,11 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
     }
     setLoading(true)
     try {
+      console.log("Validating coupon:", {
+        code: selectedCouponCode,
+        clientId: formData.clientId,
+        orderAmount: formData.amount,
+      })
       const res = await fetch("/api/coupons/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -233,6 +243,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
         }),
       })
       const data = await res.json()
+      console.log("Coupon validation result:", data)
       setCouponValidationResult(data)
       if (data.isValid) {
         setFormData((prev) => ({ ...prev, couponId: data.coupon.id }))
@@ -251,36 +262,39 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    console.log("Form submitted, starting validation...")
 
     // Validation
     if (!formData.clientId) {
+      console.log("Validation failed: no client selected")
       toast({ title: "Erro", description: "Selecione um cliente.", variant: "destructive" })
-      setLoading(false)
       return
     }
 
     if (!formData.deliveryAddress.trim()) {
+      console.log("Validation failed: no delivery address")
       toast({ title: "Erro", description: "Endereço de entrega é obrigatório.", variant: "destructive" })
-      setLoading(false)
       return
     }
 
     if (formData.serviceIds.length === 0) {
+      console.log("Validation failed: no services selected")
       toast({ title: "Erro", description: "Selecione pelo menos um serviço.", variant: "destructive" })
-      setLoading(false)
       return
     }
 
     if (selectedCouponCode && !couponValidationResult?.isValid) {
+      console.log("Validation failed: coupon not validated")
       toast({
         title: "Atenção",
         description: "Valide o cupom antes de salvar o agendamento.",
         variant: "destructive",
       })
-      setLoading(false)
       return
     }
+
+    console.log("Validation passed, starting API call...")
+    setLoading(true)
 
     try {
       const method = booking ? "PUT" : "POST"
@@ -293,6 +307,8 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
         discountAmount: formData.discountAmount,
       }
 
+      console.log("Sending request:", { method, url, payload })
+
       const res = await fetch(url, {
         method,
         headers: {
@@ -301,10 +317,16 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
         body: JSON.stringify(payload),
       })
 
+      console.log("Response status:", res.status)
+
       if (!res.ok) {
         const errorData = await res.json()
+        console.error("API error:", errorData)
         throw new Error(errorData.error || `HTTP error! status: ${res.status}`)
       }
+
+      const result = await res.json()
+      console.log("Success result:", result)
 
       toast({
         title: "Sucesso",

@@ -57,20 +57,29 @@ export const PUT = withPermission("bookings:update")(
   async (req: NextRequest, { params }: { params: { id: string } }) => {
     try {
       const body = await req.json()
+      console.log("Updating booking:", params.id, body)
 
       // Update the booking
       const updatedBooking = await prisma.v2_bookings.update({
         where: { id: params.id },
         data: {
+          clientId: body.clientId,
           deliveryAddress: body.deliveryAddress,
-          deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : undefined,
+          deliveryDate: new Date(body.deliveryDate),
           status: body.status,
           paymentStatus: body.paymentStatus,
           paymentMethod: body.paymentMethod,
-          amount: body.amount ? Number.parseFloat(body.amount.toString()) : undefined,
-          discountAmount: body.discountAmount ? Number.parseFloat(body.discountAmount.toString()) : undefined,
+          amount: Number.parseFloat(body.amount.toString()),
+          discountAmount: Number.parseFloat((body.discountAmount || 0).toString()),
           couponId: body.couponId || null,
-          notes: body.notes,
+          notes: body.notes || null,
+          bookingServices: {
+            deleteMany: {},
+            create: body.serviceIds.map((serviceId: string) => ({
+              serviceId: serviceId,
+              quantity: 1,
+            })),
+          },
         },
         include: {
           client: true,
@@ -83,60 +92,24 @@ export const PUT = withPermission("bookings:update")(
           payments: true,
         },
       })
-
-      // Update services if provided
-      if (body.serviceIds && Array.isArray(body.serviceIds)) {
-        // Delete existing services
-        await prisma.v2_bookingServices.deleteMany({
-          where: { bookingId: params.id },
-        })
-
-        // Create new services
-        await prisma.v2_bookingServices.createMany({
-          data: body.serviceIds.map((serviceId: string) => ({
-            bookingId: params.id,
-            serviceId: serviceId,
-            quantity: 1,
-          })),
-        })
-      }
-
-      // Fetch updated booking with services
-      const finalBooking = await prisma.v2_bookings.findUnique({
-        where: { id: params.id },
-        include: {
-          client: true,
-          bookingServices: {
-            include: {
-              service: true,
-            },
-          },
-          coupon: true,
-          payments: true,
-        },
-      })
-
-      if (!finalBooking) {
-        return NextResponse.json({ error: "Booking not found after update" }, { status: 404 })
-      }
 
       const formattedBooking = {
-        ...finalBooking,
-        amount: Number(finalBooking.amount),
-        discountAmount: Number(finalBooking.discountAmount),
-        services: finalBooking.bookingServices.map((bs) => ({
+        ...updatedBooking,
+        amount: Number(updatedBooking.amount),
+        discountAmount: Number(updatedBooking.discountAmount),
+        services: updatedBooking.bookingServices.map((bs) => ({
           ...bs.service,
           price: Number(bs.service.price),
           quantity: bs.quantity,
         })),
-        coupon: finalBooking.coupon
+        coupon: updatedBooking.coupon
           ? {
-              ...finalBooking.coupon,
-              discountValue: Number(finalBooking.coupon.discountValue),
-              minimumAmount: finalBooking.coupon.minimumAmount ? Number(finalBooking.coupon.minimumAmount) : null,
+              ...updatedBooking.coupon,
+              discountValue: Number(updatedBooking.coupon.discountValue),
+              minimumAmount: updatedBooking.coupon.minimumAmount ? Number(updatedBooking.coupon.minimumAmount) : null,
             }
           : null,
-        payments: finalBooking.payments.map((payment) => ({
+        payments: updatedBooking.payments.map((payment) => ({
           ...payment,
           amount: Number(payment.amount),
           discountAmount: Number(payment.discountAmount),

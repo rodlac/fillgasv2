@@ -46,15 +46,11 @@ export function withPermission(permission: string) {
 
         // For now, we'll allow all authenticated users
         // In the future, you can implement role-based permissions here
-        // const userPermissions = user.user_metadata?.permissions || []
-        // if (!userPermissions.includes(permission)) {
-        //   return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-        // }
 
         return handler(req, ...args)
       } catch (error) {
         console.error("Auth error:", error)
-        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+        return NextResponse.json({ error: "Authentication failed" }, { status: 401 })
       }
     }
 }

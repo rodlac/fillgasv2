@@ -8,70 +8,83 @@ export const POST = withPermission("coupons:read")(async (req: NextRequest) => {
 
     if (!code || !clientId || orderAmount === undefined) {
       return NextResponse.json(
-        { isValid: false, reason: "Código do cupom, ID do cliente e valor do pedido são obrigatórios" },
+        { isValid: false, reason: "Código do cupom, ID do cliente e valor do pedido são obrigatórios." },
         { status: 400 },
       )
     }
 
-    // Find the coupon
-    const coupon = await prisma.v2_coupons.findUnique({
-      where: { code: code.toUpperCase() },
+    // Find the coupon by code
+    const coupon = await prisma.v2_coupons.findFirst({
+      where: {
+        code: code.toUpperCase(),
+        isActive: true,
+      },
     })
 
     if (!coupon) {
-      return NextResponse.json({ isValid: false, reason: "Cupom não encontrado" })
-    }
-
-    if (!coupon.isActive) {
-      return NextResponse.json({ isValid: false, reason: "Cupom inativo" })
-    }
-
-    const now = new Date()
-    if (now < coupon.validFrom) {
-      return NextResponse.json({ isValid: false, reason: "Cupom ainda não é válido" })
-    }
-
-    if (now > coupon.validUntil) {
-      return NextResponse.json({ isValid: false, reason: "Cupom expirado" })
-    }
-
-    // Check minimum amount
-    if (coupon.minimumAmount && Number(orderAmount) < Number(coupon.minimumAmount)) {
       return NextResponse.json({
         isValid: false,
-        reason: `Valor mínimo do pedido deve ser R$ ${Number(coupon.minimumAmount).toFixed(2)}`,
+        reason: "Cupom não encontrado ou inativo.",
       })
     }
 
-    // Check max usage
-    if (coupon.maxUsage && coupon.currentUsage >= coupon.maxUsage) {
-      return NextResponse.json({ isValid: false, reason: "Cupom esgotado" })
+    // Check if coupon is expired
+    if (coupon.expiresAt && new Date() > coupon.expiresAt) {
+      return NextResponse.json({
+        isValid: false,
+        reason: "Cupom expirado.",
+      })
     }
 
-    // Check max usage per user
-    if (coupon.maxUsagePerUser) {
-      const userUsageCount = await prisma.v2_couponUsages.count({
+    // Check usage limit
+    if (coupon.usageLimit !== null) {
+      const usageCount = await prisma.v2_bookings.count({
         where: {
           couponId: coupon.id,
-          clientId: clientId,
         },
       })
 
-      if (userUsageCount >= coupon.maxUsagePerUser) {
-        return NextResponse.json({ isValid: false, reason: "Limite de uso por cliente atingido" })
+      if (usageCount >= coupon.usageLimit) {
+        return NextResponse.json({
+          isValid: false,
+          reason: "Limite de uso do cupom atingido.",
+        })
       }
     }
 
-    // Calculate discount
+    // Check minimum amount
+    if (coupon.minimumAmount && orderAmount < Number(coupon.minimumAmount)) {
+      return NextResponse.json({
+        isValid: false,
+        reason: `Valor mínimo do pedido deve ser R$ ${Number(coupon.minimumAmount).toFixed(2)}.`,
+      })
+    }
+
+    // Check if client has already used this coupon (if it's single-use per client)
+    const existingUsage = await prisma.v2_bookings.findFirst({
+      where: {
+        clientId: clientId,
+        couponId: coupon.id,
+      },
+    })
+
+    if (existingUsage && coupon.usageLimit === 1) {
+      return NextResponse.json({
+        isValid: false,
+        reason: "Este cupom já foi utilizado por você.",
+      })
+    }
+
+    // Calculate discount amount
     let discountAmount = 0
     if (coupon.discountType === "percentage") {
-      discountAmount = (Number(orderAmount) * Number(coupon.discountValue)) / 100
+      discountAmount = (orderAmount * Number(coupon.discountValue)) / 100
     } else {
       discountAmount = Number(coupon.discountValue)
     }
 
     // Ensure discount doesn't exceed order amount
-    discountAmount = Math.min(discountAmount, Number(orderAmount))
+    discountAmount = Math.min(discountAmount, orderAmount)
 
     return NextResponse.json({
       isValid: true,
@@ -86,6 +99,6 @@ export const POST = withPermission("coupons:read")(async (req: NextRequest) => {
     })
   } catch (error) {
     console.error("Error validating coupon:", error)
-    return NextResponse.json({ isValid: false, reason: "Erro interno do servidor" }, { status: 500 })
+    return NextResponse.json({ isValid: false, reason: "Erro interno do servidor." }, { status: 500 })
   }
 })

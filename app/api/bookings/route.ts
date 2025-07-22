@@ -52,6 +52,7 @@ export const GET = withPermission("bookings:read")(async (req: NextRequest) => {
 export const POST = withPermission("bookings:create")(async (req: NextRequest) => {
   try {
     const body = await req.json()
+    console.log("Received booking data:", body)
 
     // Validate required fields
     if (
@@ -72,10 +73,10 @@ export const POST = withPermission("bookings:create")(async (req: NextRequest) =
       data: {
         clientId: body.clientId,
         deliveryAddress: body.deliveryAddress,
-        deliveryDate: new Date(body.deliveryDate || body.bookingDate),
+        deliveryDate: new Date(body.deliveryDate),
         status: body.status || "scheduled",
         paymentStatus: body.paymentStatus || "pending",
-        paymentMethod: body.paymentMethod,
+        paymentMethod: body.paymentMethod || "pix",
         amount: Number.parseFloat(body.amount.toString()),
         discountAmount: Number.parseFloat((body.discountAmount || 0).toString()),
         couponId: body.couponId || null,

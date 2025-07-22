@@ -1,0 +1,243 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model v2_users {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  firstName   String
+  lastName    String
+  role        String   @default("user")
+  isActive    Boolean  @default(true)
+  permissions Json?
+  lastLoginAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  auditLogs   v2_auditLogs[]
+  apiKeys     v2_apiKeys[]
+  verifiedPayments v2_payments[] @relation("VerifiedBy")
+
+  @@map("v2_users")
+}
+
+model v2_roles {
+  id           String  @id @default(cuid())
+  name         String  @unique
+  displayName  String
+  description  String?
+  permissions  Json
+  isSystemRole Boolean @default(false)
+  isActive     Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("v2_roles")
+}
+
+model v2_clients {
+  id           String   @id @default(cuid())
+  externalId   String?  @unique
+  customerId   String?  // ID do Asaas
+  name         String
+  email        String
+  cpf          String   @unique
+  phone        String
+  address      String
+  postalCode   String
+  cylinderType String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  bookings     v2_bookings[]
+  couponUsages v2_couponUsages[]
+
+  @@map("v2_clients")
+}
+
+model v2_services {
+  id       String  @id @default(cuid())
+  name     String
+  price    Decimal @db.Decimal(10, 2)
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  bookingServices v2_bookingServices[]
+
+  @@map("v2_services")
+}
+
+model v2_bookings {
+  id              String   @id @default(cuid())
+  clientId        String
+  deliveryAddress String
+  deliveryDate    DateTime
+  status          String   @default("scheduled") // scheduled, confirmed, out_for_delivery, delivered, canceled
+  paymentStatus   String   @default("pending")   // pending, confirmed, failed
+  paymentMethod   String?  // PIX, CREDIT_CARD, BOLETO, BANK_TRANSFER
+  amount          Decimal  @db.Decimal(10, 2)
+  discountAmount  Decimal  @default(0) @db.Decimal(10, 2)
+  couponId        String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  client          v2_clients @relation(fields: [clientId], references: [id])
+  coupon          v2_coupons? @relation(fields: [couponId], references: [id])
+  bookingServices v2_bookingServices[]
+  payments        v2_payments[]
+  couponUsages    v2_couponUsages[]
+
+  @@map("v2_bookings")
+}
+
+model v2_bookingServices {
+  id        String @id @default(cuid())
+  bookingId String
+  serviceId String
+  quantity  Int    @default(1)
+
+  // Relations
+  booking v2_bookings @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  service v2_services @relation(fields: [serviceId], references: [id])
+
+  @@map("v2_bookingServices")
+}
+
+model v2_payments {
+  id              String   @id @default(cuid())
+  bookingId       String
+  asaasPaymentId  String?  // ID da transação no Asaas
+  amount          Decimal  @db.Decimal(10, 2)
+  discountAmount  Decimal  @default(0) @db.Decimal(10, 2)
+  finalAmount     Decimal  @db.Decimal(10, 2)
+  status          String   @default("pending") // pending, confirmed, failed, awaiting_transfer, proof_submitted, proof_verified, proof_rejected
+  paymentMethod   String   // PIX, CREDIT_CARD, BOLETO, BANK_TRANSFER
+  paymentProofUrl String?
+  verifiedBy      String?
+  verificationNotes String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  booking    v2_bookings @relation(fields: [bookingId], references: [id])
+  verifier   v2_users?   @relation("VerifiedBy", fields: [verifiedBy], references: [id])
+  proofs     v2_paymentProofs[]
+
+  @@map("v2_payments")
+}
+
+model v2_paymentProofs {
+  id        String @id @default(cuid())
+  paymentId String
+  filename  String
+  filePath  String
+  mimeType  String
+  fileSize  Int
+  createdAt DateTime @default(now())
+
+  // Relations
+  payment v2_payments @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("v2_paymentProofs")
+}
+
+model v2_coupons {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  name             String
+  discountType     String   // percentage, fixed
+  discountValue    Decimal  @db.Decimal(10, 2)
+  minimumAmount    Decimal? @db.Decimal(10, 2)
+  maxUsage         Int?
+  currentUsage     Int      @default(0)
+  maxUsagePerUser  Int?
+  validFrom        DateTime
+  validUntil       DateTime
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  bookings     v2_bookings[]
+  couponUsages v2_couponUsages[]
+
+  @@map("v2_coupons")
+}
+
+model v2_couponUsages {
+  id             String   @id @default(cuid())
+  couponId       String
+  bookingId      String
+  clientId       String
+  discountAmount Decimal  @db.Decimal(10, 2)
+  usedAt         DateTime @default(now())
+
+  // Relations
+  coupon  v2_coupons  @relation(fields: [couponId], references: [id])
+  booking v2_bookings @relation(fields: [bookingId], references: [id])
+  client  v2_clients  @relation(fields: [clientId], references: [id])
+
+  @@map("v2_couponUsages")
+}
+
+model v2_apiKeys {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  keyHash     String
+  keyPrefix   String
+  permissions Json
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  user v2_users @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("v2_apiKeys")
+}
+
+model v2_auditLogs {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  changes    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  // Relations
+  user v2_users? @relation(fields: [userId], references: [id])
+
+  @@map("v2_auditLogs")
+}
+
+model v2_paymentMethods {
+  id                String  @id @default(cuid())
+  method            String  @unique // PIX, CREDIT_CARD, BOLETO, BANK_TRANSFER
+  displayName       String
+  isActive          Boolean @default(true)
+  fixedFee          Decimal @default(0) @db.Decimal(10, 2)
+  percentageFee     Decimal @default(0) @db.Decimal(5, 4)
+  passFeesToClient  Boolean @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("v2_paymentMethods")
+}

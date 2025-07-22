@@ -2,39 +2,84 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Eye, Edit, Trash2 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Eye, Edit, Plus } from "lucide-react"
 import { BookingModalProvider, useBookingModal } from "@/contexts/booking-modal-context"
 import BookingModal from "@/components/booking-modal"
 import BookingViewModal from "@/components/booking-view-modal"
-import { toast } from "sonner"
+
+interface Service {
+  id: string
+  name: string
+  price: number
+  quantity: number
+}
+
+interface Client {
+  id: string
+  name: string
+  email: string
+  phone: string
+  address: string
+}
+
+interface Coupon {
+  id: string
+  code: string
+  discountType: "PERCENTAGE" | "FIXED"
+  discountValue: number
+  minimumAmount?: number
+}
+
+interface Payment {
+  id: string
+  method: string
+  amount: number
+  status: string
+  createdAt: string
+}
 
 interface Booking {
   id: string
-  client: {
-    name: string
-    email: string
-  }
-  service: {
-    name: string
-    price: number
-  }
-  scheduledDate: string
-  scheduledTime: string
+  clientId: string
+  client: Client
+  deliveryAddress: string
+  deliveryDate: string
   status: string
-  address: string
+  paymentStatus: string
+  paymentMethod: string
+  amount: number
+  discountAmount: number
+  couponId?: string
+  coupon?: Coupon
   notes?: string
-  couponCode?: string
-  totalAmount: number
+  services: Service[]
+  payments: Payment[]
+  createdAt: string
+}
+
+const statusColors = {
+  PENDING: "bg-yellow-100 text-yellow-800",
+  CONFIRMED: "bg-blue-100 text-blue-800",
+  IN_PROGRESS: "bg-purple-100 text-purple-800",
+  COMPLETED: "bg-green-100 text-green-800",
+  CANCELLED: "bg-red-100 text-red-800",
+}
+
+const paymentStatusColors = {
+  PENDING: "bg-yellow-100 text-yellow-800",
+  PAID: "bg-green-100 text-green-800",
+  CANCELLED: "bg-red-100 text-red-800",
 }
 
 function BookingsPageContent() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
-  const [viewModalOpen, setViewModalOpen] = useState(false)
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [viewingBooking, setViewingBooking] = useState<Booking | null>(null)
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+
   const { openModal } = useBookingModal()
 
   useEffect(() => {
@@ -48,92 +93,40 @@ function BookingsPageContent() {
         const data = await response.json()
         setBookings(data)
       } else {
-        toast.error("Erro ao carregar agendamentos")
+        console.error("Failed to fetch bookings")
       }
     } catch (error) {
       console.error("Error fetching bookings:", error)
-      toast.error("Erro ao carregar agendamentos")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Tem certeza que deseja excluir este agendamento?")) {
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/bookings/${id}`, {
-        method: "DELETE",
-      })
-
-      if (response.ok) {
-        toast.success("Agendamento excluído com sucesso!")
-        fetchBookings()
-      } else {
-        toast.error("Erro ao excluir agendamento")
-      }
-    } catch (error) {
-      console.error("Error deleting booking:", error)
-      toast.error("Erro ao excluir agendamento")
-    }
+  const handleViewBooking = (booking: Booking) => {
+    setViewingBooking(booking)
+    setIsViewModalOpen(true)
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "PENDING":
-        return "bg-yellow-100 text-yellow-800"
-      case "CONFIRMED":
-        return "bg-blue-100 text-blue-800"
-      case "IN_PROGRESS":
-        return "bg-purple-100 text-purple-800"
-      case "COMPLETED":
-        return "bg-green-100 text-green-800"
-      case "CANCELLED":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "PENDING":
-        return "Pendente"
-      case "CONFIRMED":
-        return "Confirmado"
-      case "IN_PROGRESS":
-        return "Em Andamento"
-      case "COMPLETED":
-        return "Concluído"
-      case "CANCELLED":
-        return "Cancelado"
-      default:
-        return status
-    }
-  }
-
-  const handleView = (booking: Booking) => {
-    setSelectedBooking(booking)
-    setViewModalOpen(true)
-  }
-
-  const handleEdit = (booking: Booking) => {
+  const handleEditBooking = (booking: Booking) => {
     openModal(booking)
   }
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("pt-BR")
+  }
+
   if (loading) {
-    return <div>Carregando...</div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Carregando agendamentos...</div>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Agendamentos</h1>
-          <p className="text-muted-foreground">Gerencie todos os agendamentos de serviços</p>
-        </div>
+        <h1 className="text-3xl font-bold">Agendamentos</h1>
         <Button onClick={() => openModal()}>
           <Plus className="mr-2 h-4 w-4" />
           Novo Agendamento
@@ -143,62 +136,72 @@ function BookingsPageContent() {
       <Card>
         <CardHeader>
           <CardTitle>Lista de Agendamentos</CardTitle>
-          <CardDescription>Visualize e gerencie todos os agendamentos</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Serviço</TableHead>
-                <TableHead>Data/Hora</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {bookings.map((booking) => (
-                <TableRow key={booking.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{booking.client.name}</div>
-                      <div className="text-sm text-muted-foreground">{booking.client.email}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{booking.service.name}</TableCell>
-                  <TableCell>
-                    <div>
-                      <div>{new Date(booking.scheduledDate).toLocaleDateString("pt-BR")}</div>
-                      <div className="text-sm text-muted-foreground">{booking.scheduledTime}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={getStatusColor(booking.status)}>{getStatusText(booking.status)}</Badge>
-                  </TableCell>
-                  <TableCell>R$ {booking.totalAmount.toFixed(2)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end space-x-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleView(booking)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(booking)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(booking.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          {bookings.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">Nenhum agendamento encontrado</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Data de Entrega</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Pagamento</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead>Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {bookings.map((booking) => (
+                  <TableRow key={booking.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{booking.client.name}</div>
+                        <div className="text-sm text-gray-500">{booking.client.email}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>{formatDate(booking.deliveryDate)}</TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          statusColors[booking.status as keyof typeof statusColors] || "bg-gray-100 text-gray-800"
+                        }
+                      >
+                        {booking.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          paymentStatusColors[booking.paymentStatus as keyof typeof paymentStatusColors] ||
+                          "bg-gray-100 text-gray-800"
+                        }
+                      >
+                        {booking.paymentStatus}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>R$ {(booking.amount - booking.discountAmount).toFixed(2)}</TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Button variant="outline" size="sm" onClick={() => handleViewBooking(booking)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleEditBooking(booking)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
       <BookingModal />
-      <BookingViewModal isOpen={viewModalOpen} onClose={() => setViewModalOpen(false)} booking={selectedBooking} />
+      <BookingViewModal booking={viewingBooking} isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr"
+import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
 export function createServerSupabaseClient() {
@@ -9,10 +9,10 @@ export function createServerSupabaseClient() {
       get(name: string) {
         return cookieStore.get(name)?.value
       },
-      set(name: string, value: string, options: CookieOptions) {
+      set(name: string, value: string, options: any) {
         cookieStore.set({ name, value, ...options })
       },
-      remove(name: string, options: CookieOptions) {
+      remove(name: string, options: any) {
         cookieStore.set({ name, value: "", ...options })
       },
     },
@@ -28,12 +28,8 @@ export function createSupabaseReqResClient(req: Request) {
         const match = cookie.match(new RegExp(`(^| )${name}=([^;]+)`))
         return match ? match[2] : undefined
       },
-      set() {
-        // Not implemented for request/response pattern
-      },
-      remove() {
-        // Not implemented for request/response pattern
-      },
+      set() {},
+      remove() {},
     },
   })
 }

@@ -1,499 +1,248 @@
 "use client"
 
 import type React from "react"
+
 import { useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon } from "lucide-react"
-import { format } from "date-fns"
-import { useToast } from "@/hooks/use-toast"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
-import { BookingModalProvider, useBookingModal } from "@/contexts/booking-modal-context"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { useBookingModal } from "@/contexts/booking-modal-context"
 
-interface Client {
-  id: string
-  name: string
-  email: string
-}
-
-interface Service {
-  id: string
-  name: string
-  price: number
-}
-
-interface Coupon {
-  id: string
-  code: string
-  name: string
-  discountType: "percentage" | "fixed"
-  discountValue: number
-  minimumAmount: number | null
-}
-
-interface Booking {
-  id?: string
-  clientId: string
-  client?: Client
-  deliveryAddress: string
-  deliveryDate: string
-  status: string
-  amount: number
-  discountAmount: number
-  paymentMethod: string
-  paymentStatus: string
-  couponId: string | null
-  coupon?: Coupon | null
-  serviceIds: string[]
-  services?: Service[]
-  notes?: string
-}
-
-interface BookingModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSave: () => void
-  booking: Booking | null
-}
-
-function BookingModalContent({ isOpen, onClose, onSave, booking }: BookingModalProps) {
-  const { toast } = useToast()
+export function BookingModal() {
   const {
-    // Form state
+    // State
+    isOpen,
+    isLoading,
     clientId,
-    setClientId,
-    deliveryAddress,
-    setDeliveryAddress,
-    deliveryDate,
-    setDeliveryDate,
-    status,
-    setStatus,
-    amount,
-    discountAmount,
-    paymentMethod,
-    setPaymentMethod,
-    paymentStatus,
-    setPaymentStatus,
     serviceIds,
+    scheduledDate,
+    scheduledTime,
     notes,
-    setNotes,
-
-    // Data state
+    paymentMethod,
+    status,
+    couponCode,
+    subtotal,
+    discountAmount,
+    finalAmount,
     clients,
     services,
-
-    // UI state
-    loading,
-    setLoading,
-    selectedCouponCode,
-    setSelectedCouponCode,
-    couponValidationResult,
-    setCouponValidationResult,
+    errors,
 
     // Actions
-    resetForm,
-    loadBooking,
-    fetchInitialData,
+    closeModal,
+    setClientId,
+    setServiceIds,
+    setScheduledDate,
+    setScheduledTime,
+    setNotes,
+    setPaymentMethod,
+    setStatus,
+    setCouponCode,
+    loadClients,
+    loadServices,
     validateCoupon,
-    toggleService,
-    calculateFinalAmount,
+    submitBooking,
   } = useBookingModal()
 
-  // Handle modal open/close and data loading
+  // Load data when modal opens
   useEffect(() => {
-    if (!isOpen) {
-      resetForm()
-      return
+    if (isOpen) {
+      console.log("Modal opened, loading data...")
+      loadClients()
+      loadServices()
     }
+  }, [isOpen, loadClients, loadServices])
 
-    // Load data when modal opens
-    fetchInitialData()
+  // Validate coupon when coupon code changes
+  useEffect(() => {
+    if (couponCode) {
+      const timeoutId = setTimeout(() => {
+        validateCoupon()
+      }, 500) // Debounce validation
 
-    // Load booking data if editing
-    if (booking) {
-      loadBooking(booking)
+      return () => clearTimeout(timeoutId)
+    }
+  }, [couponCode, validateCoupon])
+
+  const handleServiceToggle = (serviceId: string, checked: boolean) => {
+    console.log("Toggling service:", serviceId, checked)
+    if (checked) {
+      setServiceIds([...serviceIds, serviceId])
     } else {
-      resetForm()
-    }
-  }, [isOpen, booking])
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { id, value } = e.target
-    switch (id) {
-      case "deliveryAddress":
-        setDeliveryAddress(value)
-        break
-      case "notes":
-        setNotes(value)
-        break
+      setServiceIds(serviceIds.filter((id) => id !== serviceId))
     }
   }
 
-  const handleClientChange = (value: string) => {
-    console.log("Client changed to:", value)
-    setClientId(value)
-  }
-
-  const handlePaymentMethodChange = (value: string) => {
-    console.log("Payment method changed to:", value)
-    setPaymentMethod(value)
-  }
-
-  const handlePaymentStatusChange = (value: string) => {
-    console.log("Payment status changed to:", value)
-    setPaymentStatus(value)
-  }
-
-  const handleStatusChange = (value: string) => {
-    console.log("Status changed to:", value)
-    setStatus(value)
-  }
-
-  const handleDateChange = (date: Date | undefined) => {
-    if (date) {
-      setDeliveryDate(date.toISOString())
-    }
-  }
-
-  const handleCouponCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedCouponCode(e.target.value)
-    setCouponValidationResult(null)
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-
-    const formData = {
-      clientId,
-      deliveryAddress,
-      deliveryDate,
-      status,
-      amount,
-      discountAmount,
-      paymentMethod,
-      paymentStatus,
-      couponId: couponValidationResult?.isValid ? couponValidationResult.coupon?.id || null : null,
-      serviceIds,
-      notes,
-    }
-
-    console.log("Form submitted, current formData:", formData)
-
-    // Validation
-    if (!clientId) {
-      console.log("Validation failed: no client selected")
-      toast({ title: "Erro", description: "Selecione um cliente.", variant: "destructive" })
-      return
-    }
-
-    if (!deliveryAddress.trim()) {
-      console.log("Validation failed: no delivery address")
-      toast({ title: "Erro", description: "Endereço de entrega é obrigatório.", variant: "destructive" })
-      return
-    }
-
-    if (serviceIds.length === 0) {
-      console.log("Validation failed: no services selected")
-      toast({ title: "Erro", description: "Selecione pelo menos um serviço.", variant: "destructive" })
-      return
-    }
-
-    if (selectedCouponCode && !couponValidationResult?.isValid) {
-      console.log("Validation failed: coupon not validated")
-      toast({
-        title: "Atenção",
-        description: "Valide o cupom antes de salvar o agendamento.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    console.log("Validation passed, starting API call...")
-    setLoading(true)
-
-    try {
-      const method = booking ? "PUT" : "POST"
-      const url = booking ? `/api/bookings/${booking.id}` : "/api/bookings"
-
-      console.log("Sending request:", { method, url, payload: formData })
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      })
-
-      console.log("Response status:", res.status)
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        console.error("API error:", errorData)
-        throw new Error(errorData.error || `HTTP error! status: ${res.status}`)
-      }
-
-      const result = await res.json()
-      console.log("Success result:", result)
-
-      toast({
-        title: "Sucesso",
-        description: `Agendamento ${booking ? "atualizado" : "criado"} com sucesso.`,
-      })
-      onSave()
-      onClose()
-    } catch (error: any) {
-      console.error("Failed to save booking:", error)
-      toast({
-        title: "Erro",
-        description: `Falha ao ${booking ? "atualizar" : "criar"} agendamento: ${error.message}`,
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
+    console.log("Form submitted")
+    submitBooking()
   }
-
-  const finalAmount = calculateFinalAmount()
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={closeModal}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{booking ? "Editar Agendamento" : "Novo Agendamento"}</DialogTitle>
+          <DialogTitle>Novo Agendamento</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="clientId" className="text-right">
-                Cliente *
-              </Label>
-              <Select value={clientId} onValueChange={handleClientChange}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Selecione um cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name} - {client.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="deliveryAddress" className="text-right">
-                Endereço de Entrega *
-              </Label>
-              <Input
-                id="deliveryAddress"
-                value={deliveryAddress}
-                onChange={handleInputChange}
-                className="col-span-3"
-                placeholder="Digite o endereço completo"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="deliveryDate" className="text-right">
-                Data e Hora *
-              </Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant={"outline"} className="col-span-3 justify-start text-left font-normal">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {deliveryDate ? (
-                      format(new Date(deliveryDate), "dd/MM/yyyy HH:mm")
-                    ) : (
-                      <span>Selecione uma data e hora</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar mode="single" selected={new Date(deliveryDate)} onSelect={handleDateChange} initialFocus />
-                  <div className="p-3 border-t border-gray-200">
-                    <Input
-                      type="time"
-                      value={format(new Date(deliveryDate), "HH:mm")}
-                      onChange={(e) => {
-                        const [hours, minutes] = e.target.value.split(":").map(Number)
-                        const newDate = new Date(deliveryDate)
-                        newDate.setHours(hours, minutes)
-                        setDeliveryDate(newDate.toISOString())
-                      }}
-                    />
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="grid grid-cols-4 items-start gap-4">
-              <Label className="text-right pt-2">Serviços *</Label>
-              <div className="col-span-3 grid grid-cols-1 gap-2 max-h-32 overflow-y-auto">
-                {services.map((service) => (
-                  <div key={service.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`service-${service.id}`}
-                      checked={serviceIds.includes(service.id)}
-                      onCheckedChange={() => toggleService(service.id)}
-                    />
-                    <Label htmlFor={`service-${service.id}`} className="text-sm">
-                      {service.name} (R$ {Number(service.price).toFixed(2)})
-                    </Label>
-                  </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Client Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="client">Cliente *</Label>
+            <Select value={clientId} onValueChange={setClientId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((client) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.name} - {client.email}
+                  </SelectItem>
                 ))}
-              </div>
-            </div>
+              </SelectContent>
+            </Select>
+            {errors.clientId && <p className="text-sm text-red-500">{errors.clientId}</p>}
+          </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="couponCode" className="text-right">
-                Cupom
-              </Label>
-              <div className="col-span-3 flex gap-2">
-                <Input
-                  id="couponCode"
-                  value={selectedCouponCode}
-                  onChange={handleCouponCodeChange}
-                  placeholder="Código do cupom (opcional)"
-                />
-                <Button
-                  type="button"
-                  onClick={validateCoupon}
-                  disabled={loading || !selectedCouponCode || !clientId}
-                  size="sm"
-                >
-                  Validar
-                </Button>
-              </div>
-            </div>
-            {couponValidationResult && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <div></div>
-                <div className="col-span-3 text-sm">
-                  {couponValidationResult.isValid ? (
-                    <p className="text-green-600">
-                      ✓ Cupom válido! Desconto: R$ {Number(couponValidationResult.discountAmount).toFixed(2)}
-                    </p>
-                  ) : (
-                    <p className="text-red-600">✗ {couponValidationResult.reason}</p>
-                  )}
+          {/* Services Selection */}
+          <div className="space-y-2">
+            <Label>Serviços *</Label>
+            <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
+              {services.map((service) => (
+                <div key={service.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`service-${service.id}`}
+                    checked={serviceIds.includes(service.id)}
+                    onCheckedChange={(checked) => handleServiceToggle(service.id, checked as boolean)}
+                  />
+                  <Label htmlFor={`service-${service.id}`} className="flex-1 cursor-pointer">
+                    {service.name} - R$ {service.price.toFixed(2)}
+                  </Label>
                 </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="notes" className="text-right">
-                Observações
-              </Label>
-              <Textarea
-                id="notes"
-                value={notes}
-                onChange={handleInputChange}
-                className="col-span-3"
-                placeholder="Observações adicionais (opcional)"
-                rows={3}
-              />
+              ))}
             </div>
+            {errors.serviceIds && <p className="text-sm text-red-500">{errors.serviceIds}</p>}
+          </div>
 
-            <div className="grid grid-cols-4 items-center gap-4 pt-4 border-t">
-              <Label className="text-right">Valor dos Serviços</Label>
-              <Input value={`R$ ${Number(amount).toFixed(2)}`} className="col-span-3 bg-gray-50" readOnly />
-            </div>
-            {discountAmount > 0 && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">Desconto</Label>
-                <Input
-                  value={`- R$ ${Number(discountAmount).toFixed(2)}`}
-                  className="col-span-3 bg-gray-50 text-green-600"
-                  readOnly
-                />
-              </div>
-            )}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right font-bold">Valor Final</Label>
+          {/* Date and Time */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="date">Data *</Label>
               <Input
-                value={`R$ ${finalAmount.toFixed(2)}`}
-                className="col-span-3 font-bold text-lg bg-blue-50"
-                readOnly
+                id="date"
+                type="date"
+                value={scheduledDate}
+                onChange={(e) => setScheduledDate(e.target.value)}
+                min={new Date().toISOString().split("T")[0]}
               />
+              {errors.scheduledDate && <p className="text-sm text-red-500">{errors.scheduledDate}</p>}
             </div>
 
-            <div className="grid grid-cols-4 items-center gap-4 pt-4 border-t">
-              <Label htmlFor="paymentMethod" className="text-right">
-                Método de Pagamento
-              </Label>
-              <Select value={paymentMethod} onValueChange={handlePaymentMethodChange}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Selecione o método" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
-                  <SelectItem value="debit_card">Cartão de Débito</SelectItem>
-                  <SelectItem value="cash">Dinheiro</SelectItem>
-                  <SelectItem value="bank_transfer">Transferência Bancária</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="paymentStatus" className="text-right">
-                Status do Pagamento
-              </Label>
-              <Select value={paymentStatus} onValueChange={handlePaymentStatusChange}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Selecione o status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pendente</SelectItem>
-                  <SelectItem value="confirmed">Confirmado</SelectItem>
-                  <SelectItem value="failed">Falhou</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="status" className="text-right">
-                Status do Agendamento
-              </Label>
-              <Select value={status} onValueChange={handleStatusChange}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Selecione o status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="scheduled">Agendado</SelectItem>
-                  <SelectItem value="confirmed">Confirmado</SelectItem>
-                  <SelectItem value="out_for_delivery">Saiu para Entrega</SelectItem>
-                  <SelectItem value="delivered">Entregue</SelectItem>
-                  <SelectItem value="canceled">Cancelado</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="space-y-2">
+              <Label htmlFor="time">Horário *</Label>
+              <Input id="time" type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} />
+              {errors.scheduledTime && <p className="text-sm text-red-500">{errors.scheduledTime}</p>}
             </div>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+
+          {/* Payment Method */}
+          <div className="space-y-2">
+            <Label htmlFor="payment-method">Método de Pagamento *</Label>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o método de pagamento" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CASH">Dinheiro</SelectItem>
+                <SelectItem value="CREDIT_CARD">Cartão de Crédito</SelectItem>
+                <SelectItem value="DEBIT_CARD">Cartão de Débito</SelectItem>
+                <SelectItem value="PIX">PIX</SelectItem>
+                <SelectItem value="BANK_TRANSFER">Transferência Bancária</SelectItem>
+              </SelectContent>
+            </Select>
+            {errors.paymentMethod && <p className="text-sm text-red-500">{errors.paymentMethod}</p>}
+          </div>
+
+          {/* Status */}
+          <div className="space-y-2">
+            <Label htmlFor="status">Status</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PENDING">Pendente</SelectItem>
+                <SelectItem value="CONFIRMED">Confirmado</SelectItem>
+                <SelectItem value="IN_PROGRESS">Em Andamento</SelectItem>
+                <SelectItem value="COMPLETED">Concluído</SelectItem>
+                <SelectItem value="CANCELLED">Cancelado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Coupon Code */}
+          <div className="space-y-2">
+            <Label htmlFor="coupon">Código do Cupom</Label>
+            <Input
+              id="coupon"
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value)}
+              placeholder="Digite o código do cupom"
+            />
+            {errors.couponCode && <p className="text-sm text-red-500">{errors.couponCode}</p>}
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="notes">Observações</Label>
+            <Textarea
+              id="notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Observações adicionais..."
+              rows={3}
+            />
+          </div>
+
+          {/* Totals */}
+          {serviceIds.length > 0 && (
+            <div className="border-t pt-4 space-y-2">
+              <div className="flex justify-between">
+                <span>Subtotal:</span>
+                <span>R$ {subtotal.toFixed(2)}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Desconto:</span>
+                  <span>- R$ {discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-bold text-lg border-t pt-2">
+                <span>Total:</span>
+                <span>R$ {finalAmount.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Submit Error */}
+          {errors.submit && <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">{errors.submit}</div>}
+
+          {/* Actions */}
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button type="button" variant="outline" onClick={closeModal} disabled={isLoading}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Salvando..." : "Salvar"}
+            <Button type="submit" disabled={isLoading || serviceIds.length === 0}>
+              {isLoading ? "Criando..." : "Criar Agendamento"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
-  )
-}
-
-export function BookingModal(props: BookingModalProps) {
-  return (
-    <BookingModalProvider>
-      <BookingModalContent {...props} />
-    </BookingModalProvider>
   )
 }

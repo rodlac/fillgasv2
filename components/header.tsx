@@ -1,6 +1,6 @@
 "use client"
 
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-browser" // Updated import
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { User, LogOut } from "lucide-react"

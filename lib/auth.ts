@@ -1,13 +1,25 @@
-import { createServerSupabaseClient } from "./supabase-server"
+import { createServerSupabaseClient } from "@/lib/supabase-server" // Updated import
 import { prisma } from "./prisma"
 import type { NextRequest } from "next/server"
 
-export async function getCurrentUser(req?: NextRequest) {
-  const supabase = await createServerSupabaseClient()
-
+export async function getSession() {
+  const supabase = createServerSupabaseClient()
   const {
     data: { session },
   } = await supabase.auth.getSession()
+  return session
+}
+
+export async function getUser() {
+  const supabase = createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  return user
+}
+
+export async function getCurrentUser(req?: NextRequest) {
+  const session = await getSession()
 
   if (!session?.user) {
     return null

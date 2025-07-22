@@ -4,66 +4,50 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
+import { supabase } from "@/lib/supabase-browser" // Updated import
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const { toast } = useToast()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (error) {
-        toast({
-          title: "Erro no login",
-          description: error.message,
-          variant: "destructive",
-        })
-      } else if (data.session) {
-        toast({
-          title: "Sucesso",
-          description: "Login realizado com sucesso!",
-        })
-
-        // Aguarda um pouco para garantir que a sessão foi estabelecida
-        setTimeout(() => {
-          router.push("/dashboard")
-          router.refresh()
-        }, 100)
+        setError(error.message)
+      } else {
+        // Give a small delay to ensure session is established before redirecting
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        router.push("/dashboard")
       }
-    } catch (error) {
-      console.error("Erro no login:", error)
-      toast({
-        title: "Erro no login",
-        description: "Ocorreu um erro inesperado",
-        variant: "destructive",
-      })
+    } catch (err: any) {
+      setError(err.message || "An unexpected error occurred.")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>FillGás</CardTitle>
-          <CardDescription>Entre com suas credenciais para acessar o sistema</CardDescription>
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl">Login</CardTitle>
+          <CardDescription>Entre com seu email e senha para acessar o painel.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
@@ -72,6 +56,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
+                placeholder="m@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -89,6 +74,7 @@ export default function LoginPage() {
                 disabled={loading}
               />
             </div>
+            {error && <p className="text-sm text-red-500">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Entrando..." : "Entrar"}
             </Button>

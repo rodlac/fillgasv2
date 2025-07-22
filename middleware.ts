@@ -1,30 +1,11 @@
-import { createSupabaseMiddlewareClient } from "@/lib/supabase-middleware"
-import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
+import { createMiddlewareClient } from "@supabase/ssr"
+import { NextResponse, type NextRequest } from "next/server"
 
 export async function middleware(request: NextRequest) {
-  const { supabase, response } = createSupabaseMiddlewareClient(request)
+  const response = NextResponse.next()
+  const supabase = createMiddlewareClient({ req: request, res: response })
 
-  // Refresh session if expired - required for Server Components
-  // and to keep the session alive in the browser
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  // If no session and trying to access a protected route, redirect to login
-  if (!session && request.nextUrl.pathname.startsWith("/dashboard")) {
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = "/login"
-    redirectUrl.searchParams.set(`redirectedFrom`, request.nextUrl.pathname)
-    return NextResponse.redirect(redirectUrl)
-  }
-
-  // If there's a session and trying to access login, redirect to dashboard
-  if (session && request.nextUrl.pathname === "/login") {
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = "/dashboard"
-    return NextResponse.redirect(redirectUrl)
-  }
+  await supabase.auth.getSession()
 
   return response
 }
@@ -36,9 +17,10 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - api/auth (Supabase auth routes)
-     * - Any other public assets or API routes that don't require authentication
+     * - api (API routes)
+     * - login (login page)
+     * - (dashboard) (dashboard routes, handled by auth in layout.tsx)
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/auth|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api|login).*)",
   ],
 }

@@ -54,7 +54,7 @@ interface BookingViewModalProps {
   booking: Booking | null
 }
 
-export function BookingViewModal({ isOpen, onClose, booking }: BookingViewModalProps) {
+export default function BookingViewModal({ isOpen, onClose, booking }: BookingViewModalProps) {
   if (!booking) return null
 
   return (

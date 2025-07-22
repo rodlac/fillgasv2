@@ -1,19 +1,28 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { BookingModal } from "@/components/booking-modal"
-import { BookingViewModal } from "@/components/booking-view-modal"
-import { PlusIcon, SearchIcon, EyeIcon, PencilIcon, TrashIcon } from "lucide-react"
-import { toast } from "@/components/ui/use-toast"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { MoreHorizontal, PlusCircle, Eye, Edit, Trash2 } from "lucide-react"
 import { format } from "date-fns"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ptBR } from "date-fns/locale"
+import { BookingModalProvider, useBookingModal } from "@/contexts/booking-modal-context"
+import BookingModal from "@/components/booking-modal" // Changed to default import
+import BookingViewModal from "@/components/booking-view-modal" // Changed to default import
+import { toast } from "@/components/ui/use-toast"
 
 interface Client {
   id: string
   name: string
+  email: string
+  phone: string
+  document: string
+  address: string
+  city: string
+  state: string
+  zipCode: string
 }
 
 interface Service {
@@ -48,225 +57,205 @@ interface Booking {
   createdAt: string
 }
 
-export default function BookingsPage() {
+function BookingsPageContent() {
   const [bookings, setBookings] = useState<Booking[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterStatus, setFilterStatus] = useState("all")
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
-  const [editingBooking, setEditingBooking] = useState<Booking | null>(null)
   const [viewingBooking, setViewingBooking] = useState<Booking | null>(null)
 
-  const fetchBookings = async () => {
-    setLoading(true)
+  const { openModal } = useBookingModal() // Get openModal from context
+
+  const fetchBookings = useCallback(async () => {
+    setIsLoading(true)
     try {
       const res = await fetch("/api/bookings")
       if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`)
+        throw new Error("Failed to fetch bookings")
       }
       const data = await res.json()
-      setBookings(data || []) // Ensure it's an array
+      setBookings(data)
     } catch (error) {
-      console.error("Failed to fetch bookings:", error)
+      console.error("Error fetching bookings:", error)
       toast({
         title: "Erro",
         description: "Falha ao carregar agendamentos.",
         variant: "destructive",
       })
-      setBookings([]) // Set to empty array on error
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchBookings()
-  }, [])
+  }, [fetchBookings])
 
-  const filteredBookings = bookings.filter((booking) => {
-    const matchesSearch =
-      booking.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.id.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = filterStatus === "all" || booking.status === filterStatus
-    return matchesSearch && matchesStatus
-  })
-
-  const handleNewBooking = () => {
-    setEditingBooking(null)
-    setIsCreateModalOpen(true)
-  }
-
-  const handleEditBooking = (booking: Booking) => {
-    setEditingBooking(booking)
-    setIsCreateModalOpen(true)
-  }
-
-  const handleViewBooking = (booking: Booking) => {
+  const handleViewBooking = useCallback((booking: Booking) => {
     setViewingBooking(booking)
     setIsViewModalOpen(true)
-  }
+  }, [])
 
-  const handleDeleteBooking = async (id: string) => {
-    if (!window.confirm("Tem certeza que deseja excluir este agendamento?")) {
-      return
-    }
-    try {
-      const res = await fetch(`/api/bookings/${id}`, {
-        method: "DELETE",
-      })
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`)
-      }
-      toast({
-        title: "Sucesso",
-        description: "Agendamento excluído com sucesso.",
-      })
-      fetchBookings()
-    } catch (error) {
-      console.error("Failed to delete booking:", error)
-      toast({
-        title: "Erro",
-        description: "Falha ao excluir agendamento.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleCreateModalClose = () => {
-    setIsCreateModalOpen(false)
-    setEditingBooking(null)
-    fetchBookings() // Refresh bookings after modal close
-  }
-
-  const handleViewModalClose = () => {
+  const handleCloseViewModal = useCallback(() => {
     setIsViewModalOpen(false)
     setViewingBooking(null)
+  }, [])
+
+  const handleEditBooking = useCallback(
+    (booking: Booking) => {
+      openModal(booking) // Open modal in edit mode
+    },
+    [openModal],
+  )
+
+  const handleDeleteBooking = useCallback(
+    async (id: string) => {
+      if (!confirm("Tem certeza que deseja excluir este agendamento?")) {
+        return
+      }
+      try {
+        const res = await fetch(`/api/bookings/${id}`, {
+          method: "DELETE",
+        })
+        if (!res.ok) {
+          throw new Error("Failed to delete booking")
+        }
+        toast({
+          title: "Sucesso",
+          description: "Agendamento excluído com sucesso.",
+        })
+        fetchBookings() // Refresh list
+      } catch (error) {
+        console.error("Error deleting booking:", error)
+        toast({
+          title: "Erro",
+          description: "Falha ao excluir agendamento.",
+          variant: "destructive",
+        })
+      }
+    },
+    [fetchBookings],
+  )
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "confirmed":
+        return "bg-blue-100 text-blue-800"
+      case "in_route":
+        return "bg-purple-100 text-purple-800"
+      case "delivered":
+        return "bg-green-100 text-green-800"
+      case "cancelled":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
   }
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-full">
-        <p>Carregando agendamentos...</p>
-      </div>
-    )
+  const getPaymentStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "paid":
+        return "bg-green-100 text-green-800"
+      case "refunded":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold">Agendamentos</h1>
-        <Button onClick={handleNewBooking}>
-          <PlusIcon className="mr-2 h-4 w-4" /> Novo Agendamento
-        </Button>
-      </div>
-
-      <div className="flex gap-4 mb-4">
-        <div className="relative flex-1">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-          <Input
-            placeholder="Buscar por cliente ou ID..."
-            className="pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filtrar por status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="pending">Pendente</SelectItem>
-            <SelectItem value="confirmed">Confirmado</SelectItem>
-            <SelectItem value="in_route">Em Rota</SelectItem>
-            <SelectItem value="delivered">Entregue</SelectItem>
-            <SelectItem value="cancelled">Cancelado</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="rounded-md border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>ID</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Data</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Valor Final</TableHead>
-              <TableHead>Pagamento</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredBookings.length > 0 ? (
-              filteredBookings.map((booking) => (
-                <TableRow key={booking.id}>
-                  <TableCell className="font-medium">{booking.id.substring(0, 8)}...</TableCell>
-                  <TableCell>{booking.client.name}</TableCell>
-                  <TableCell>{format(new Date(booking.bookingDate), "dd/MM/yyyy HH:mm")}</TableCell>
-                  <TableCell>
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        booking.status === "pending"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : booking.status === "confirmed"
-                            ? "bg-blue-100 text-blue-800"
-                            : booking.status === "in_route"
-                              ? "bg-purple-100 text-purple-800"
-                              : booking.status === "delivered"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {booking.status}
-                    </span>
-                  </TableCell>
-                  <TableCell>R$ {Number(booking.finalAmount).toFixed(2)}</TableCell>
-                  <TableCell>
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        booking.paymentStatus === "pending"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : booking.paymentStatus === "paid"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {booking.paymentStatus}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleViewBooking(booking)}>
-                      <EyeIcon className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleEditBooking(booking)}>
-                      <PencilIcon className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteBooking(booking.id)}>
-                      <TrashIcon className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
+    <div className="flex flex-col sm:gap-4 sm:py-4">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-2xl font-bold">Agendamentos</CardTitle>
+          <Button onClick={() => openModal()} size="sm" className="h-8 gap-1">
+            <PlusCircle className="h-3.5 w-3.5" />
+            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">Novo Agendamento</span>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="text-center py-8">Carregando agendamentos...</div>
+          ) : bookings.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">Nenhum agendamento encontrado.</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Serviços</TableHead>
+                  <TableHead>Valor Final</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Pagamento</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                  Nenhum agendamento encontrado.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              </TableHeader>
+              <TableBody>
+                {bookings.map((booking) => (
+                  <TableRow key={booking.id}>
+                    <TableCell className="font-medium">{booking.id.substring(0, 8)}</TableCell>
+                    <TableCell>{booking.client.name}</TableCell>
+                    <TableCell>{format(new Date(booking.bookingDate), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
+                    <TableCell>{booking.services.map((s) => s.name).join(", ") || "Nenhum"}</TableCell>
+                    <TableCell>R$ {Number(booking.finalAmount).toFixed(2)}</TableCell>
+                    <TableCell>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(booking.status)}`}
+                      >
+                        {booking.status}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusBadgeClass(booking.paymentStatus)}`}
+                      >
+                        {booking.paymentStatus}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button aria-haspopup="true" size="icon" variant="ghost">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Toggle menu</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleViewBooking(booking)}>
+                            <Eye className="mr-2 h-4 w-4" /> Visualizar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEditBooking(booking)}>
+                            <Edit className="mr-2 h-4 w-4" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDeleteBooking(booking.id)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
-      {isCreateModalOpen && (
-        <BookingModal isOpen={isCreateModalOpen} onClose={handleCreateModalClose} booking={editingBooking} />
-      )}
-      {isViewModalOpen && (
-        <BookingViewModal isOpen={isViewModalOpen} onClose={handleViewModalClose} booking={viewingBooking} />
-      )}
+      <BookingModal />
+      <BookingViewModal isOpen={isViewModalOpen} onClose={handleCloseViewModal} booking={viewingBooking} />
     </div>
+  )
+}
+
+export default function BookingsPageWrapper() {
+  return (
+    <BookingModalProvider>
+      <BookingsPageContent />
+    </BookingModalProvider>
   )
 }

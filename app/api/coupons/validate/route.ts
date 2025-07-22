@@ -1,54 +1,48 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import prisma from "@/lib/prisma"
 import { withPermission } from "@/lib/auth"
 
-export const POST = withPermission("coupons:read")(async (req: NextRequest) => {
+export const POST = withPermission(async (req: NextRequest) => {
   try {
     const { code, amount } = await req.json()
 
-    if (!code || !amount) {
-      return NextResponse.json({ error: "Coupon code and amount are required" }, { status: 400 })
+    if (!code || typeof amount !== "number") {
+      return NextResponse.json({ error: "Code and amount are required" }, { status: 400 })
     }
 
-    const coupon = await prisma.v2_coupons.findUnique({
+    const coupon = await prisma.coupon.findUnique({
       where: { code },
     })
 
-    if (!coupon || coupon.isActive === false) {
-      return NextResponse.json({ isValid: false, message: "Invalid or inactive coupon" }, { status: 404 })
+    if (!coupon) {
+      return NextResponse.json({ error: "Cupom inválido ou não encontrado." }, { status: 404 })
     }
 
-    const now = new Date()
-    if (coupon.validFrom && now < coupon.validFrom) {
-      return NextResponse.json({ isValid: false, message: "Coupon not yet active" }, { status: 400 })
-    }
-    if (coupon.validUntil && now > coupon.validUntil) {
-      return NextResponse.json({ isValid: false, message: "Coupon expired" }, { status: 400 })
-    }
-
-    if (coupon.minimumAmount && Number(amount) < Number(coupon.minimumAmount)) {
+    if (coupon.minimumAmount && amount < coupon.minimumAmount) {
       return NextResponse.json(
-        { isValid: false, message: `Minimum amount of R$${Number(coupon.minimumAmount).toFixed(2)} not met` },
+        { error: `Valor mínimo de R$ ${coupon.minimumAmount.toFixed(2)} para este cupom.` },
         { status: 400 },
       )
     }
 
-    const discountAmount = Number(coupon.discountValue)
-    const finalAmount = Number(amount) - discountAmount
+    let discountValue = 0
+    if (coupon.discountType === "fixed") {
+      discountValue = coupon.discountValue
+    } else if (coupon.discountType === "percentage") {
+      discountValue = amount * (coupon.discountValue / 100)
+    }
+
+    // Ensure discount does not exceed the total amount
+    discountValue = Math.min(discountValue, amount)
 
     return NextResponse.json({
-      isValid: true,
-      coupon: {
-        ...coupon,
-        discountValue: Number(coupon.discountValue),
-        minimumAmount: coupon.minimumAmount ? Number(coupon.minimumAmount) : null,
-      },
-      discountAmount,
-      finalAmount: Math.max(0, finalAmount), // Ensure final amount is not negative
-      message: "Coupon applied successfully!",
+      valid: true,
+      coupon,
+      discountAmount: discountValue,
+      finalAmount: amount - discountValue,
     })
   } catch (error) {
     console.error("Error validating coupon:", error)
-    return NextResponse.json({ error: "Failed to validate coupon" }, { status: 500 })
+    return NextResponse.json({ error: "Falha ao validar cupom." }, { status: 500 })
   }
-})
+}, "admin")

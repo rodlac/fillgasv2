@@ -1,44 +1,41 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr"
-import { cookies } from "next/headers"
 import { type NextRequest, NextResponse } from "next/server"
+import { createServerSupabaseClient } from "@/lib/supabase-server"
 
-// This is a simplified version. In a real app, you'd fetch user roles/permissions.
-// For now, it just ensures a session exists.
-export function withPermission(permission: string) {
-  return (handler: (req: NextRequest, context: { params: any }) => Promise<NextResponse>) => {
-    return async (req: NextRequest, context: { params: any }) => {
-      const cookieStore = cookies()
-      const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!, // Use service role key for server-side operations
-        {
-          cookies: {
-            get(name: string) {
-              return cookieStore.get(name)?.value
-            },
-            set(name: string, value: string, options: CookieOptions) {
-              cookieStore.set({ name, value, ...options })
-            },
-            remove(name: string, options: CookieOptions) {
-              cookieStore.set({ name, value: "", ...options })
-            },
-          },
-        },
-      )
+type Role = "admin" | "user" // Example roles
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+export function withPermission(handler: Function, requiredRole: Role) {
+  return async (req: NextRequest, ...args: any[]) => {
+    const supabase = createServerSupabaseClient()
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
 
-      if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
-
-      // In a real application, you would check if the user has the 'permission'
-      // For example: if (!user.permissions.includes(permission)) { ... }
-      console.log(`User ${user.id} attempting action with permission: ${permission}`)
-
-      return handler(req, context)
+    if (error || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // In a real application, you would fetch the user's role from your database
+    // For demonstration, let's assume a simple check or fetch from user metadata
+    // const { data: profile, error: profileError } = await supabase
+    //   .from('profiles')
+    //   .select('role')
+    //   .eq('id', user.id)
+    //   .single();
+
+    // if (profileError || !profile || profile.role !== requiredRole) {
+    //   return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // }
+
+    // For now, let's assume all authenticated users are 'admin' for simplicity
+    // You should replace this with actual role management
+    if (requiredRole === "admin") {
+      // If the user is authenticated, we'll allow them for now.
+      // Implement actual role checking here.
+    } else {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    return handler(req, ...args)
   }
 }

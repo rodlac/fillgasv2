@@ -1,22 +1,22 @@
 "use client"
 
-import type React from "react"
-import { useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Textarea } from "@/components/ui/textarea"
-import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Loader2 } from "lucide-react"
-import { format } from "date-fns"
+import { Calendar } from "@/components/ui/calendar"
+import { CalendarIcon, Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
+import { Command, CommandList, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { Badge } from "@/components/ui/badge"
 import { useBookingModal } from "@/contexts/booking-modal-context"
+import { useState, useEffect } from "react"
 
-export function BookingModal() {
+export default function BookingModal() {
   const {
     isOpen,
     closeModal,
@@ -26,116 +26,97 @@ export function BookingModal() {
     services,
     isLoading,
     isSubmitting,
-    errors,
-    subtotal,
-    discountAmount,
+    isCouponValidating,
+    couponDiscount,
     totalAmount,
-    handleServiceToggle,
+    finalAmount,
+    handleSelectChange,
+    handleDateChange,
     handleCouponCodeChange,
     validateCoupon,
-    couponData,
-    isCouponValidating,
-    submitForm,
-    setIsOpen, // Declared the variable here
+    handleSubmit,
   } = useBookingModal()
 
+  const [clientOpen, setClientOpen] = useState(false)
+  const [servicesOpen, setServicesOpen] = useState(false)
+
+  // Effect to update form data when services or clients change (e.g., after initial fetch)
   useEffect(() => {
-    if (isOpen && formData.couponCode) {
-      validateCoupon()
+    if (!isLoading && formData.clientId && !clients.some((c) => c.id === formData.clientId)) {
+      setFormData((prev) => ({ ...prev, clientId: "" }))
     }
-  }, [isOpen, formData.couponCode, validateCoupon])
-
-  const handleDateSelect = (date: Date | undefined) => {
-    setFormData((prev) => ({ ...prev, deliveryDate: date }))
-  }
-
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({ ...prev, deliveryTime: e.target.value }))
-  }
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { id, value } = e.target
-    setFormData((prev) => ({ ...prev, [id]: value }))
-  }
-
-  const handleSelectChange = (field: keyof typeof formData) => (value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
+    if (!isLoading && formData.selectedServiceIds.length > 0) {
+      const validServiceIds = formData.selectedServiceIds.filter((id) => services.some((s) => s.id === id))
+      if (validServiceIds.length !== formData.selectedServiceIds.length) {
+        setFormData((prev) => ({ ...prev, selectedServiceIds: validServiceIds }))
+      }
+    }
+  }, [isLoading, clients, services, formData.clientId, formData.selectedServiceIds, setFormData])
 
   if (isLoading) {
     return null // Or a loading spinner
   }
 
+  const selectedClient = clients.find((client) => client.id === formData.clientId)
+  const selectedServices = services.filter((service) => formData.selectedServiceIds.includes(service.id))
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={closeModal}>
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{formData.id ? "Editar Agendamento" : "Novo Agendamento"}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          {/* Client Select */}
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="clientId" className="text-right">
               Cliente
             </Label>
-            <Select value={formData.clientId} onValueChange={handleSelectChange("clientId")}>
-              <SelectTrigger className={cn("col-span-3", errors.clientId && "border-red-500")}>
-                <SelectValue placeholder="Selecione um cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                {clients.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.clientId && <p className="col-span-4 text-right text-sm text-red-500">{errors.clientId}</p>}
+            <Popover open={clientOpen} onOpenChange={setClientOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={clientOpen}
+                  className="col-span-3 justify-between bg-transparent"
+                >
+                  {selectedClient ? selectedClient.name : "Selecione um cliente..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                <Command>
+                  <CommandInput placeholder="Buscar cliente..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {clients.map((client) => (
+                        <CommandItem
+                          key={client.id}
+                          value={client.name}
+                          onSelect={() => {
+                            handleSelectChange("clientId")(client.id)
+                            setClientOpen(false)
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              formData.clientId === client.id ? "opacity-100" : "opacity-0",
+                            )}
+                          />
+                          {client.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
-          {/* Services Checkboxes */}
-          <div className="grid grid-cols-4 items-start gap-4">
-            <Label className="text-right pt-2">Serviços</Label>
-            <div className="col-span-3 grid grid-cols-2 gap-2">
-              {services.map((service) => (
-                <div key={service.id} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`service-${service.id}`}
-                    checked={formData.serviceIds.includes(service.id)}
-                    onCheckedChange={() => handleServiceToggle(service.id)}
-                  />
-                  <label
-                    htmlFor={`service-${service.id}`}
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    {service.name} (R${service.price.toFixed(2)})
-                  </label>
-                </div>
-              ))}
-            </div>
-            {errors.serviceIds && <p className="col-span-4 text-right text-sm text-red-500">{errors.serviceIds}</p>}
-          </div>
-
-          {/* Delivery Address */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="deliveryAddress" className="text-right">
-              Endereço
-            </Label>
-            <Input
-              id="deliveryAddress"
-              value={formData.deliveryAddress}
-              onChange={handleInputChange}
-              className={cn("col-span-3", errors.deliveryAddress && "border-red-500")}
-            />
-            {errors.deliveryAddress && (
-              <p className="col-span-4 text-right text-sm text-red-500">{errors.deliveryAddress}</p>
-            )}
-          </div>
-
-          {/* Delivery Date */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="deliveryDate" className="text-right">
-              Data
+            <Label htmlFor="bookingDate" className="text-right">
+              Data e Hora
             </Label>
             <Popover>
               <PopoverTrigger asChild>
@@ -143,93 +124,122 @@ export function BookingModal() {
                   variant={"outline"}
                   className={cn(
                     "col-span-3 justify-start text-left font-normal",
-                    !formData.deliveryDate && "text-muted-foreground",
-                    errors.deliveryDate && "border-red-500",
+                    !formData.bookingDate && "text-muted-foreground",
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {formData.deliveryDate ? format(formData.deliveryDate, "PPP") : <span>Selecione uma data</span>}
+                  {formData.bookingDate ? (
+                    format(formData.bookingDate, "dd/MM/yyyy HH:mm", { locale: ptBR })
+                  ) : (
+                    <span>Selecione a data e hora</span>
+                  )}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0">
-                <Calendar mode="single" selected={formData.deliveryDate} onSelect={handleDateSelect} initialFocus />
+                <Calendar
+                  mode="single"
+                  selected={formData.bookingDate}
+                  onSelect={handleDateChange}
+                  initialFocus
+                  locale={ptBR}
+                />
+                <div className="p-3 border-t border-border">
+                  <Input
+                    type="time"
+                    value={formData.bookingDate ? format(formData.bookingDate, "HH:mm") : ""}
+                    onChange={(e) => {
+                      const [hours, minutes] = e.target.value.split(":").map(Number)
+                      if (formData.bookingDate) {
+                        const newDate = new Date(formData.bookingDate)
+                        newDate.setHours(hours, minutes)
+                        handleDateChange(newDate)
+                      } else {
+                        const now = new Date()
+                        now.setHours(hours, minutes)
+                        handleDateChange(now)
+                      }
+                    }}
+                  />
+                </div>
               </PopoverContent>
             </Popover>
-            {errors.deliveryDate && <p className="col-span-4 text-right text-sm text-red-500">{errors.deliveryDate}</p>}
           </div>
 
-          {/* Delivery Time */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="deliveryTime" className="text-right">
-              Hora
+          <div className="grid grid-cols-4 items-start gap-4">
+            <Label htmlFor="services" className="text-right pt-2">
+              Serviços
             </Label>
-            <Input
-              id="deliveryTime"
-              type="time"
-              value={formData.deliveryTime}
-              onChange={handleTimeChange}
-              className={cn("col-span-3", errors.deliveryTime && "border-red-500")}
-            />
-            {errors.deliveryTime && <p className="col-span-4 text-right text-sm text-red-500">{errors.deliveryTime}</p>}
+            <div className="col-span-3 flex flex-col gap-2">
+              <Popover open={servicesOpen} onOpenChange={setServicesOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={servicesOpen}
+                    className="justify-between bg-transparent"
+                  >
+                    {formData.selectedServiceIds.length > 0
+                      ? `${formData.selectedServiceIds.length} serviço(s) selecionado(s)`
+                      : "Selecione serviços..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                  <Command>
+                    <CommandInput placeholder="Buscar serviço..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhum serviço encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {services.map((service) => (
+                          <CommandItem
+                            key={service.id}
+                            value={service.name}
+                            onSelect={() => {
+                              const currentSelection = new Set(formData.selectedServiceIds)
+                              if (currentSelection.has(service.id)) {
+                                currentSelection.delete(service.id)
+                              } else {
+                                currentSelection.add(service.id)
+                              }
+                              handleSelectChange("selectedServiceIds")(Array.from(currentSelection))
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.selectedServiceIds.includes(service.id) ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                            {service.name} (R$ {service.price.toFixed(2)})
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {selectedServices.map((service) => (
+                  <Badge key={service.id} variant="secondary" className="flex items-center gap-1">
+                    {service.name}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-0 ml-1"
+                      onClick={() => {
+                        const newSelection = formData.selectedServiceIds.filter((id) => id !== service.id)
+                        handleSelectChange("selectedServiceIds")(newSelection)
+                      }}
+                    >
+                      x
+                    </Button>
+                  </Badge>
+                ))}
+              </div>
+            </div>
           </div>
 
-          {/* Payment Method */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="paymentMethod" className="text-right">
-              Pagamento
-            </Label>
-            <Select value={formData.paymentMethod} onValueChange={handleSelectChange("paymentMethod")}>
-              <SelectTrigger className={cn("col-span-3", errors.paymentMethod && "border-red-500")}>
-                <SelectValue placeholder="Selecione um método" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="CREDIT_CARD">Cartão de Crédito</SelectItem>
-                <SelectItem value="DEBIT_CARD">Cartão de Débito</SelectItem>
-                <SelectItem value="PIX">PIX</SelectItem>
-                <SelectItem value="CASH">Dinheiro</SelectItem>
-              </SelectContent>
-            </Select>
-            {errors.paymentMethod && (
-              <p className="col-span-4 text-right text-sm text-red-500">{errors.paymentMethod}</p>
-            )}
-          </div>
-
-          {/* Status */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="status" className="text-right">
-              Status
-            </Label>
-            <Select value={formData.status} onValueChange={handleSelectChange("status")}>
-              <SelectTrigger className="col-span-3">
-                <SelectValue placeholder="Selecione um status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PENDING">Pendente</SelectItem>
-                <SelectItem value="CONFIRMED">Confirmado</SelectItem>
-                <SelectItem value="COMPLETED">Concluído</SelectItem>
-                <SelectItem value="CANCELLED">Cancelado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Payment Status */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="paymentStatus" className="text-right">
-              Status Pagamento
-            </Label>
-            <Select value={formData.paymentStatus} onValueChange={handleSelectChange("paymentStatus")}>
-              <SelectTrigger className="col-span-3">
-                <SelectValue placeholder="Selecione um status de pagamento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PENDING">Pendente</SelectItem>
-                <SelectItem value="PAID">Pago</SelectItem>
-                <SelectItem value="REFUNDED">Reembolsado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Coupon Code */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="couponCode" className="text-right">
               Cupom
@@ -238,64 +248,67 @@ export function BookingModal() {
               <Input
                 id="couponCode"
                 value={formData.couponCode}
-                onChange={handleInputChange}
-                onBlur={validateCoupon}
-                className={cn(errors.couponCode && "border-red-500")}
-                placeholder="Código do cupom"
+                onChange={(e) => handleCouponCodeChange(e.target.value)}
+                className="flex-grow"
               />
-              <Button onClick={validateCoupon} disabled={isCouponValidating || !formData.couponCode}>
-                {isCouponValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Validar"}
+              <Button type="button" onClick={validateCoupon} disabled={isCouponValidating || !formData.couponCode}>
+                {isCouponValidating ? "Validando..." : "Validar"}
               </Button>
             </div>
-            {errors.couponCode && <p className="col-span-4 text-right text-sm text-red-500">{errors.couponCode}</p>}
-            {couponData && (
-              <p className="col-span-4 text-right text-sm text-green-600">
-                Cupom: {couponData.code} ({couponData.discountType === "FIXED" ? "R$" : ""}
-                {couponData.discountValue}
-                {couponData.discountType === "PERCENTAGE" ? "%" : ""} OFF)
-              </p>
-            )}
           </div>
 
-          {/* Notes */}
-          <div className="grid grid-cols-4 items-start gap-4">
-            <Label htmlFor="notes" className="text-right pt-2">
-              Observações
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Valor Total</Label>
+            <span className="col-span-3 font-medium">R$ {totalAmount.toFixed(2)}</span>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Desconto</Label>
+            <span className="col-span-3 text-red-500">R$ {couponDiscount.toFixed(2)}</span>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Valor Final</Label>
+            <span className="col-span-3 font-bold text-lg">R$ {finalAmount.toFixed(2)}</span>
+          </div>
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="paymentMethod" className="text-right">
+              Método de Pagamento
             </Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={handleInputChange}
-              className="col-span-3"
-              placeholder="Observações adicionais"
-            />
+            <Select value={formData.paymentMethod} onValueChange={handleSelectChange("paymentMethod")}>
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Selecione o método" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
+                <SelectItem value="debit_card">Cartão de Débito</SelectItem>
+                <SelectItem value="pix">PIX</SelectItem>
+                <SelectItem value="cash">Dinheiro</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Summary */}
-          <div className="col-span-4 border-t pt-4 mt-4">
-            <div className="flex justify-between text-lg font-semibold">
-              <span>Subtotal:</span>
-              <span>R${subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-lg font-semibold text-red-600">
-              <span>Desconto:</span>
-              <span>-R${discountAmount.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-xl font-bold mt-2">
-              <span>Total:</span>
-              <span>R${totalAmount.toFixed(2)}</span>
-            </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="paymentStatus" className="text-right">
+              Status do Pagamento
+            </Label>
+            <Select value={formData.paymentStatus} onValueChange={handleSelectChange("paymentStatus")}>
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Selecione o status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="paid">Pago</SelectItem>
+                <SelectItem value="refunded">Estornado</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={closeModal}>
-            Cancelar
-          </Button>
-          <Button onClick={submitForm} disabled={isSubmitting}>
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {formData.id ? "Salvar Alterações" : "Criar Agendamento"}
-          </Button>
-        </DialogFooter>
+
+          <DialogFooter>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Salvando..." : "Salvar Agendamento"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

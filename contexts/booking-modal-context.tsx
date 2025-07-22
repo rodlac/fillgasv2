@@ -1,370 +1,334 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react"
-import { useToast } from "@/hooks/use-toast"
-import { format } from "date-fns"
+import { createContext, useContext, useState, useCallback, useEffect } from "react"
+import { toast } from "@/components/ui/use-toast"
 
 interface Client {
   id: string
   name: string
   email: string
   phone: string
+  document: string
   address: string
+  city: string
+  state: string
+  zipCode: string
 }
 
 interface Service {
   id: string
   name: string
   price: number
-  description: string
 }
 
 interface Coupon {
   id: string
   code: string
-  discountType: "PERCENTAGE" | "FIXED"
+  name: string
+  discountType: "percentage" | "fixed"
   discountValue: number
   minimumAmount: number | null
-  validFrom: Date | null
-  validUntil: Date | null
-  isActive: boolean
 }
 
-interface BookingFormData {
-  id?: string
+interface Booking {
+  id: string
   clientId: string
-  serviceIds: string[]
-  deliveryAddress: string
-  deliveryDate: Date | undefined
-  deliveryTime: string
-  status: "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED"
-  paymentStatus: "PENDING" | "PAID" | "REFUNDED"
-  paymentMethod: "CREDIT_CARD" | "DEBIT_CARD" | "PIX" | "CASH"
+  client: Client
+  bookingDate: string
+  status: string
+  amount: number
+  discountAmount: number
+  finalAmount: number
+  paymentMethod: string
+  paymentStatus: string
+  couponId: string | null
+  coupon: Coupon | null
+  services: Service[]
+  createdAt: string
+}
+
+interface FormData {
+  id?: string // For editing existing bookings
+  clientId: string
+  bookingDate: Date | undefined
+  selectedServiceIds: string[]
   couponCode: string
-  notes: string
+  paymentMethod: string
+  paymentStatus: string
 }
 
 interface BookingModalContextType {
   isOpen: boolean
-  openModal: (booking?: any) => void
+  openModal: (booking?: Booking) => void
   closeModal: () => void
-  formData: BookingFormData
-  setFormData: React.Dispatch<React.SetStateAction<BookingFormData>>
+  formData: FormData
+  setFormData: React.Dispatch<React.SetStateAction<FormData>>
   clients: Client[]
   services: Service[]
   isLoading: boolean
   isSubmitting: boolean
-  errors: Record<string, string>
-  subtotal: number
-  discountAmount: number
+  isCouponValidating: boolean
+  couponDiscount: number
   totalAmount: number
-  handleServiceToggle: (serviceId: string) => void
+  finalAmount: number
+  handleSelectChange: (name: keyof FormData) => (value: string | string[]) => void
+  handleDateChange: (date: Date | undefined) => void
   handleCouponCodeChange: (code: string) => void
   validateCoupon: () => Promise<void>
-  couponData: Coupon | null
-  isCouponValidating: boolean
-  submitForm: () => Promise<void>
+  handleSubmit: (e: React.FormEvent) => Promise<void>
+  resetForm: () => void
 }
 
 const BookingModalContext = createContext<BookingModalContextType | undefined>(undefined)
 
-const initialFormData: BookingFormData = {
+const initialFormData: FormData = {
   clientId: "",
-  serviceIds: [],
-  deliveryAddress: "",
-  deliveryDate: undefined,
-  deliveryTime: "",
-  status: "PENDING",
-  paymentStatus: "PENDING",
-  paymentMethod: "PIX",
+  bookingDate: undefined,
+  selectedServiceIds: [],
   couponCode: "",
-  notes: "",
+  paymentMethod: "",
+  paymentStatus: "",
 }
 
 export const BookingModalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [formData, setFormData] = useState<BookingFormData>(initialFormData)
+  const [formData, setFormData] = useState<FormData>(initialFormData)
   const [clients, setClients] = useState<Client[]>([])
   const [services, setServices] = useState<Service[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [couponData, setCouponData] = useState<Coupon | null>(null)
   const [isCouponValidating, setIsCouponValidating] = useState(false)
-  const { toast } = useToast()
+  const [couponDiscount, setCouponDiscount] = useState(0)
+  const [totalAmount, setTotalAmount] = useState(0)
+  const [finalAmount, setFinalAmount] = useState(0)
+
+  const fetchInitialData = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const [clientsRes, servicesRes] = await Promise.all([fetch("/api/clients"), fetch("/api/services")])
+
+      const clientsData = await clientsRes.json()
+      const servicesData = await servicesRes.json()
+
+      setClients(clientsData)
+      setServices(servicesData)
+    } catch (error) {
+      console.error("Failed to fetch initial data:", error)
+      toast({
+        title: "Erro",
+        description: "Falha ao carregar dados iniciais para o agendamento.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true)
-      try {
-        const [clientsRes, servicesRes] = await Promise.all([fetch("/api/clients"), fetch("/api/services")])
+    fetchInitialData()
+  }, [fetchInitialData])
 
-        if (!clientsRes.ok || !servicesRes.ok) {
-          throw new Error("Failed to fetch initial data")
-        }
-
-        const clientsData = await clientsRes.json()
-        const servicesData = await servicesRes.json()
-
-        setClients(clientsData)
-        setServices(servicesData)
-      } catch (error) {
-        console.error("Error fetching initial data:", error)
-        toast({
-          title: "Erro",
-          description: "Falha ao carregar dados iniciais.",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchData()
-  }, [toast])
-
-  const openModal = useCallback((booking?: any) => {
-    if (booking) {
-      const deliveryDate = booking.deliveryDate ? new Date(booking.deliveryDate) : undefined
-      const deliveryTime = booking.deliveryDate ? format(new Date(booking.deliveryDate), "HH:mm") : ""
-      setFormData({
-        id: booking.id,
-        clientId: booking.clientId,
-        serviceIds: booking.services.map((s: any) => s.id),
-        deliveryAddress: booking.deliveryAddress,
-        deliveryDate,
-        deliveryTime,
-        status: booking.status,
-        paymentStatus: booking.paymentStatus,
-        paymentMethod: booking.paymentMethod,
-        couponCode: booking.coupon?.code || "",
-        notes: booking.notes || "",
-      })
-      setCouponData(booking.coupon || null)
-    } else {
-      setFormData(initialFormData)
-      setCouponData(null)
-    }
-    setErrors({})
-    setIsOpen(true)
-  }, [])
-
-  const closeModal = useCallback(() => {
-    setIsOpen(false)
-    setFormData(initialFormData)
-    setCouponData(null)
-    setErrors({})
-  }, [])
-
-  const subtotal = useMemo(() => {
-    return formData.serviceIds.reduce((sum, serviceId) => {
+  useEffect(() => {
+    const calculatedTotal = formData.selectedServiceIds.reduce((sum, serviceId) => {
       const service = services.find((s) => s.id === serviceId)
       return sum + (service?.price || 0)
     }, 0)
-  }, [formData.serviceIds, services])
+    setTotalAmount(calculatedTotal)
+    setFinalAmount(calculatedTotal - couponDiscount)
+  }, [formData.selectedServiceIds, services, couponDiscount])
 
-  const discountAmount = useMemo(() => {
-    if (!couponData) return 0
-    if (couponData.discountType === "FIXED") {
-      return Math.min(couponData.discountValue, subtotal)
-    }
-    if (couponData.discountType === "PERCENTAGE") {
-      return Math.min(subtotal * (couponData.discountValue / 100), subtotal)
-    }
-    return 0
-  }, [couponData, subtotal])
-
-  const totalAmount = useMemo(() => {
-    return subtotal - discountAmount
-  }, [subtotal, discountAmount])
-
-  const handleServiceToggle = useCallback((serviceId: string) => {
-    setFormData((prev) => {
-      const newServiceIds = prev.serviceIds.includes(serviceId)
-        ? prev.serviceIds.filter((id) => id !== serviceId)
-        : [...prev.serviceIds, serviceId]
-      return { ...prev, serviceIds: newServiceIds }
-    })
+  const resetForm = useCallback(() => {
+    setFormData(initialFormData)
+    setCouponDiscount(0)
+    setTotalAmount(0)
+    setFinalAmount(0)
   }, [])
 
-  const handleCouponCodeChange = useCallback((code: string) => {
-    setFormData((prev) => ({ ...prev, couponCode: code }))
-    setCouponData(null) // Clear coupon data when code changes
+  const openModal = useCallback(
+    (booking?: Booking) => {
+      if (booking) {
+        setFormData({
+          id: booking.id,
+          clientId: booking.clientId,
+          bookingDate: new Date(booking.bookingDate),
+          selectedServiceIds: booking.services.map((s) => s.id),
+          couponCode: booking.coupon?.code || "",
+          paymentMethod: booking.paymentMethod,
+          paymentStatus: booking.paymentStatus,
+        })
+        setCouponDiscount(booking.discountAmount)
+        setTotalAmount(booking.amount)
+        setFinalAmount(booking.finalAmount)
+      } else {
+        resetForm()
+      }
+      setIsOpen(true)
+    },
+    [resetForm],
+  )
+
+  const closeModal = useCallback(() => {
+    setIsOpen(false)
+    resetForm()
+  }, [resetForm])
+
+  const handleSelectChange = useCallback(
+    (name: keyof FormData) => (value: string | string[]) => {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }))
+    },
+    [],
+  )
+
+  const handleDateChange = useCallback((date: Date | undefined) => {
+    setFormData((prev) => ({
+      ...prev,
+      bookingDate: date,
+    }))
   }, [])
+
+  const handleCouponCodeChange = useCallback(
+    (code: string) => {
+      setFormData((prev) => ({
+        ...prev,
+        couponCode: code,
+      }))
+      if (!code) {
+        setCouponDiscount(0)
+        setFinalAmount(totalAmount)
+      }
+    },
+    [totalAmount],
+  )
 
   const validateCoupon = useCallback(async () => {
     if (!formData.couponCode) {
-      setCouponData(null)
-      setErrors((prev) => ({ ...prev, couponCode: "" }))
+      setCouponDiscount(0)
+      setFinalAmount(totalAmount)
       return
     }
 
     setIsCouponValidating(true)
-    setErrors((prev) => ({ ...prev, couponCode: "" }))
     try {
       const res = await fetch("/api/coupons/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: formData.couponCode, amount: subtotal }),
+        body: JSON.stringify({ code: formData.couponCode, amount: totalAmount }),
       })
-
       const data = await res.json()
 
-      if (res.ok && data.isValid) {
-        setCouponData(data.coupon)
+      if (res.ok) {
+        setCouponDiscount(data.discountAmount)
+        setFinalAmount(data.finalAmount)
         toast({
           title: "Sucesso",
-          description: data.message,
+          description: `Cupom aplicado! Desconto de R$ ${data.discountAmount.toFixed(2)}.`,
         })
       } else {
-        setCouponData(null)
-        setErrors((prev) => ({ ...prev, couponCode: data.message || "Cupom inválido" }))
+        setCouponDiscount(0)
+        setFinalAmount(totalAmount)
         toast({
-          title: "Erro",
-          description: data.message || "Falha ao validar cupom.",
+          title: "Erro ao validar cupom",
+          description: data.error || "Ocorreu um erro desconhecido.",
           variant: "destructive",
         })
       }
     } catch (error) {
       console.error("Error validating coupon:", error)
-      setCouponData(null)
-      setErrors((prev) => ({ ...prev, couponCode: "Erro ao validar cupom." }))
+      setCouponDiscount(0)
+      setFinalAmount(totalAmount)
       toast({
         title: "Erro",
-        description: "Erro ao validar cupom.",
+        description: "Falha na comunicação com o servidor para validar cupom.",
         variant: "destructive",
       })
     } finally {
       setIsCouponValidating(false)
     }
-  }, [formData.couponCode, subtotal, toast])
+  }, [formData.couponCode, totalAmount])
 
-  const validateForm = useCallback(() => {
-    const newErrors: Record<string, string> = {}
-    if (!formData.clientId) newErrors.clientId = "Cliente é obrigatório."
-    if (formData.serviceIds.length === 0) newErrors.serviceIds = "Selecione pelo menos um serviço."
-    if (!formData.deliveryAddress) newErrors.deliveryAddress = "Endereço de entrega é obrigatório."
-    if (!formData.deliveryDate) newErrors.deliveryDate = "Data de entrega é obrigatória."
-    if (!formData.deliveryTime) newErrors.deliveryTime = "Hora de entrega é obrigatória."
-    if (!formData.paymentMethod) newErrors.paymentMethod = "Método de pagamento é obrigatório."
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }, [formData])
-
-  const submitForm = useCallback(async () => {
-    if (!validateForm()) {
-      toast({
-        title: "Erro de Validação",
-        description: "Por favor, preencha todos os campos obrigatórios.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      const fullDeliveryDate = formData.deliveryDate
-        ? new Date(
-            formData.deliveryDate.setHours(
-              Number.parseInt(formData.deliveryTime.split(":")[0]),
-              Number.parseInt(formData.deliveryTime.split(":")[1]),
-              0,
-              0,
-            ),
-          )
-        : undefined
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault()
+      setIsSubmitting(true)
 
       const payload = {
         clientId: formData.clientId,
-        serviceIds: formData.serviceIds,
-        deliveryAddress: formData.deliveryAddress,
-        deliveryDate: fullDeliveryDate?.toISOString(),
-        status: formData.status,
-        paymentStatus: formData.paymentStatus,
+        bookingDate: formData.bookingDate?.toISOString(),
+        serviceIds: formData.selectedServiceIds,
+        couponCode: formData.couponCode || null,
         paymentMethod: formData.paymentMethod,
+        paymentStatus: formData.paymentStatus,
         amount: totalAmount,
-        discountAmount: discountAmount,
-        couponId: couponData?.id || null,
-        notes: formData.notes,
+        discountAmount: couponDiscount,
+        finalAmount: finalAmount,
       }
 
-      const method = formData.id ? "PUT" : "POST"
-      const url = formData.id ? `/api/bookings/${formData.id}` : "/api/bookings"
+      try {
+        const method = formData.id ? "PUT" : "POST"
+        const url = formData.id ? `/api/bookings/${formData.id}` : "/api/bookings"
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
 
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || "Falha ao salvar agendamento.")
+        const data = await res.json()
+
+        if (res.ok) {
+          toast({
+            title: "Sucesso",
+            description: `Agendamento ${formData.id ? "atualizado" : "criado"} com sucesso!`,
+          })
+          closeModal()
+          // Optionally, trigger a refresh of the bookings list in the parent component
+          // For now, we'll rely on the user refreshing or navigating.
+        } else {
+          toast({
+            title: "Erro",
+            description: data.error || `Falha ao ${formData.id ? "atualizar" : "criar"} agendamento.`,
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Error submitting booking:", error)
+        toast({
+          title: "Erro",
+          description: `Falha na comunicação com o servidor ao ${formData.id ? "atualizar" : "criar"} agendamento.`,
+          variant: "destructive",
+        })
+      } finally {
+        setIsSubmitting(false)
       }
-
-      toast({
-        title: "Sucesso",
-        description: `Agendamento ${formData.id ? "atualizado" : "criado"} com sucesso!`,
-      })
-      closeModal()
-      // Optionally, trigger a re-fetch of bookings in the parent component
-    } catch (error: any) {
-      console.error("Error submitting form:", error)
-      toast({
-        title: "Erro",
-        description: error.message || "Falha ao salvar agendamento.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
-  }, [formData, validateForm, totalAmount, discountAmount, couponData, toast, closeModal])
-
-  const contextValue = useMemo(
-    () => ({
-      isOpen,
-      openModal,
-      closeModal,
-      formData,
-      setFormData,
-      clients,
-      services,
-      isLoading,
-      isSubmitting,
-      errors,
-      subtotal,
-      discountAmount,
-      totalAmount,
-      handleServiceToggle,
-      handleCouponCodeChange,
-      validateCoupon,
-      couponData,
-      isCouponValidating,
-      submitForm,
-    }),
-    [
-      isOpen,
-      openModal,
-      closeModal,
-      formData,
-      setFormData,
-      clients,
-      services,
-      isLoading,
-      isSubmitting,
-      errors,
-      subtotal,
-      discountAmount,
-      totalAmount,
-      handleServiceToggle,
-      handleCouponCodeChange,
-      validateCoupon,
-      couponData,
-      isCouponValidating,
-      submitForm,
-    ],
+    },
+    [formData, totalAmount, couponDiscount, finalAmount, closeModal],
   )
+
+  const contextValue = {
+    isOpen,
+    openModal,
+    closeModal,
+    formData,
+    setFormData,
+    clients,
+    services,
+    isLoading,
+    isSubmitting,
+    isCouponValidating,
+    couponDiscount,
+    totalAmount,
+    finalAmount,
+    handleSelectChange,
+    handleDateChange,
+    handleCouponCodeChange,
+    validateCoupon,
+    handleSubmit,
+    resetForm,
+  }
 
   return <BookingModalContext.Provider value={contextValue}>{children}</BookingModalContext.Provider>
 }

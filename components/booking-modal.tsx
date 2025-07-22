@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -61,22 +61,24 @@ interface BookingModalProps {
   booking: Booking | null
 }
 
+const initialFormData: Booking = {
+  clientId: "",
+  deliveryAddress: "",
+  deliveryDate: new Date().toISOString(),
+  status: "scheduled",
+  amount: 0,
+  discountAmount: 0,
+  paymentMethod: "pix",
+  paymentStatus: "pending",
+  couponId: null,
+  serviceIds: [],
+  notes: "",
+}
+
 export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalProps) {
   const { toast } = useToast()
 
-  const [formData, setFormData] = useState<Booking>({
-    clientId: "",
-    deliveryAddress: "",
-    deliveryDate: new Date().toISOString(),
-    status: "scheduled",
-    amount: 0,
-    discountAmount: 0,
-    paymentMethod: "pix",
-    paymentStatus: "pending",
-    couponId: null,
-    serviceIds: [],
-    notes: "",
-  })
+  const [formData, setFormData] = useState<Booking>(initialFormData)
   const [loading, setLoading] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
   const [services, setServices] = useState<Service[]>([])
@@ -89,7 +91,48 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
     coupon?: { id: string; code: string; name: string }
   } | null>(null)
 
+  // Reset form when modal opens/closes
   useEffect(() => {
+    if (!isOpen) {
+      setFormData(initialFormData)
+      setSelectedCouponCode("")
+      setCouponValidationResult(null)
+      return
+    }
+
+    if (booking) {
+      console.log("Loading existing booking:", booking)
+      setFormData({
+        ...booking,
+        amount: Number(booking.amount),
+        discountAmount: Number(booking.discountAmount),
+        deliveryDate: new Date(booking.deliveryDate).toISOString(),
+        serviceIds: booking.services?.map((s) => s.id) || [],
+      })
+      setSelectedCouponCode(booking.coupon?.code || "")
+      if (booking.coupon) {
+        setCouponValidationResult({
+          isValid: true,
+          discountAmount: Number(booking.discountAmount),
+          coupon: {
+            id: booking.coupon.id,
+            code: booking.coupon.code,
+            name: booking.coupon.name,
+          },
+        })
+      }
+    } else {
+      console.log("Creating new booking")
+      setFormData(initialFormData)
+      setSelectedCouponCode("")
+      setCouponValidationResult(null)
+    }
+  }, [isOpen, booking])
+
+  // Fetch initial data when modal opens
+  useEffect(() => {
+    if (!isOpen) return
+
     const fetchData = async () => {
       try {
         console.log("Fetching initial data...")
@@ -120,96 +163,62 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
       }
     }
 
-    if (isOpen) {
-      fetchData()
-    }
+    fetchData()
   }, [isOpen, toast])
 
+  // Calculate amount based on selected services
   useEffect(() => {
-    if (booking) {
-      setFormData({
-        ...booking,
-        amount: Number(booking.amount),
-        discountAmount: Number(booking.discountAmount),
-        deliveryDate: new Date(booking.deliveryDate).toISOString(),
-        serviceIds: booking.services?.map((s) => s.id) || [],
-      })
-      setSelectedCouponCode(booking.coupon?.code || "")
-      if (booking.coupon) {
-        setCouponValidationResult({
-          isValid: true,
-          discountAmount: Number(booking.discountAmount),
-          coupon: {
-            id: booking.coupon.id,
-            code: booking.coupon.code,
-            name: booking.coupon.name,
-          },
-        })
-      }
-    } else {
-      setFormData({
-        clientId: "",
-        deliveryAddress: "",
-        deliveryDate: new Date().toISOString(),
-        status: "scheduled",
-        amount: 0,
-        discountAmount: 0,
-        paymentMethod: "pix",
-        paymentStatus: "pending",
-        couponId: null,
-        serviceIds: [],
-        notes: "",
-      })
-      setSelectedCouponCode("")
-      setCouponValidationResult(null)
-    }
-  }, [booking, isOpen])
-
-  useEffect(() => {
-    // Calculate amount based on selected services
     const selectedServices = services.filter((s) => formData.serviceIds.includes(s.id))
     const totalAmount = selectedServices.reduce((sum, service) => sum + Number(service.price), 0)
-    setFormData((prev) => ({ ...prev, amount: totalAmount }))
+
+    setFormData((prev) => ({
+      ...prev,
+      amount: totalAmount,
+    }))
   }, [formData.serviceIds, services])
 
+  // Apply coupon discount
   useEffect(() => {
-    // Apply coupon discount
     let discount = 0
     if (couponValidationResult?.isValid && couponValidationResult.discountAmount !== undefined) {
       discount = couponValidationResult.discountAmount
     }
+
     setFormData((prev) => ({
       ...prev,
       discountAmount: discount,
     }))
   }, [formData.amount, couponValidationResult])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target
     setFormData((prev) => ({
       ...prev,
       [id]: value,
     }))
-  }
+  }, [])
 
-  const handleSelectChange = (value: string, field: keyof Booking) => {
-    console.log(`Setting ${field} to:`, value)
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
-  }
+  const handleSelectChange = useCallback(
+    (field: keyof Booking) => (value: string) => {
+      console.log(`Setting ${field} to:`, value)
+      setFormData((prev) => ({
+        ...prev,
+        [field]: value,
+      }))
+    },
+    [],
+  )
 
-  const handleDateChange = (date: Date | undefined) => {
+  const handleDateChange = useCallback((date: Date | undefined) => {
     if (date) {
       setFormData((prev) => ({
         ...prev,
         deliveryDate: date.toISOString(),
       }))
     }
-  }
+  }, [])
 
-  const handleServiceToggle = (serviceId: string) => {
+  const handleServiceToggle = useCallback((serviceId: string) => {
     setFormData((prev) => {
       const newServiceIds = prev.serviceIds.includes(serviceId)
         ? prev.serviceIds.filter((id) => id !== serviceId)
@@ -217,15 +226,15 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
       console.log("Updated service IDs:", newServiceIds)
       return { ...prev, serviceIds: newServiceIds }
     })
-  }
+  }, [])
 
-  const handleCouponCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCouponCodeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedCouponCode(e.target.value)
     setCouponValidationResult(null)
     setFormData((prev) => ({ ...prev, couponId: null }))
-  }
+  }, [])
 
-  const handleValidateCoupon = async () => {
+  const handleValidateCoupon = useCallback(async () => {
     if (!selectedCouponCode || !formData.clientId) {
       setCouponValidationResult({ isValid: false, reason: "Código do cupom e cliente são obrigatórios." })
       return
@@ -262,93 +271,96 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedCouponCode, formData.clientId, formData.amount, toast])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log("Form submitted, current formData:", formData)
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault()
+      console.log("Form submitted, current formData:", formData)
 
-    // Validation
-    if (!formData.clientId) {
-      console.log("Validation failed: no client selected")
-      toast({ title: "Erro", description: "Selecione um cliente.", variant: "destructive" })
-      return
-    }
-
-    if (!formData.deliveryAddress.trim()) {
-      console.log("Validation failed: no delivery address")
-      toast({ title: "Erro", description: "Endereço de entrega é obrigatório.", variant: "destructive" })
-      return
-    }
-
-    if (formData.serviceIds.length === 0) {
-      console.log("Validation failed: no services selected")
-      toast({ title: "Erro", description: "Selecione pelo menos um serviço.", variant: "destructive" })
-      return
-    }
-
-    if (selectedCouponCode && !couponValidationResult?.isValid) {
-      console.log("Validation failed: coupon not validated")
-      toast({
-        title: "Atenção",
-        description: "Valide o cupom antes de salvar o agendamento.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    console.log("Validation passed, starting API call...")
-    setLoading(true)
-
-    try {
-      const method = booking ? "PUT" : "POST"
-      const url = booking ? `/api/bookings/${booking.id}` : "/api/bookings"
-
-      const payload = {
-        ...formData,
-        deliveryDate: formData.deliveryDate,
-        amount: formData.amount,
-        discountAmount: formData.discountAmount,
+      // Validation
+      if (!formData.clientId) {
+        console.log("Validation failed: no client selected")
+        toast({ title: "Erro", description: "Selecione um cliente.", variant: "destructive" })
+        return
       }
 
-      console.log("Sending request:", { method, url, payload })
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      })
-
-      console.log("Response status:", res.status)
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        console.error("API error:", errorData)
-        throw new Error(errorData.error || `HTTP error! status: ${res.status}`)
+      if (!formData.deliveryAddress.trim()) {
+        console.log("Validation failed: no delivery address")
+        toast({ title: "Erro", description: "Endereço de entrega é obrigatório.", variant: "destructive" })
+        return
       }
 
-      const result = await res.json()
-      console.log("Success result:", result)
+      if (formData.serviceIds.length === 0) {
+        console.log("Validation failed: no services selected")
+        toast({ title: "Erro", description: "Selecione pelo menos um serviço.", variant: "destructive" })
+        return
+      }
 
-      toast({
-        title: "Sucesso",
-        description: `Agendamento ${booking ? "atualizado" : "criado"} com sucesso.`,
-      })
-      onSave()
-      onClose()
-    } catch (error: any) {
-      console.error("Failed to save booking:", error)
-      toast({
-        title: "Erro",
-        description: `Falha ao ${booking ? "atualizar" : "criar"} agendamento: ${error.message}`,
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
+      if (selectedCouponCode && !couponValidationResult?.isValid) {
+        console.log("Validation failed: coupon not validated")
+        toast({
+          title: "Atenção",
+          description: "Valide o cupom antes de salvar o agendamento.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      console.log("Validation passed, starting API call...")
+      setLoading(true)
+
+      try {
+        const method = booking ? "PUT" : "POST"
+        const url = booking ? `/api/bookings/${booking.id}` : "/api/bookings"
+
+        const payload = {
+          ...formData,
+          deliveryDate: formData.deliveryDate,
+          amount: formData.amount,
+          discountAmount: formData.discountAmount,
+        }
+
+        console.log("Sending request:", { method, url, payload })
+
+        const res = await fetch(url, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        })
+
+        console.log("Response status:", res.status)
+
+        if (!res.ok) {
+          const errorData = await res.json()
+          console.error("API error:", errorData)
+          throw new Error(errorData.error || `HTTP error! status: ${res.status}`)
+        }
+
+        const result = await res.json()
+        console.log("Success result:", result)
+
+        toast({
+          title: "Sucesso",
+          description: `Agendamento ${booking ? "atualizado" : "criado"} com sucesso.`,
+        })
+        onSave()
+        onClose()
+      } catch (error: any) {
+        console.error("Failed to save booking:", error)
+        toast({
+          title: "Erro",
+          description: `Falha ao ${booking ? "atualizar" : "criar"} agendamento: ${error.message}`,
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    },
+    [formData, booking, selectedCouponCode, couponValidationResult, toast, onSave, onClose],
+  )
 
   const finalAmount = Math.max(0, formData.amount - formData.discountAmount)
 
@@ -364,7 +376,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
               <Label htmlFor="clientId" className="text-right">
                 Cliente *
               </Label>
-              <Select value={formData.clientId || ""} onValueChange={(value) => handleSelectChange(value, "clientId")}>
+              <Select value={formData.clientId} onValueChange={handleSelectChange("clientId")}>
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Selecione um cliente" />
                 </SelectTrigger>
@@ -385,7 +397,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
               <Input
                 id="deliveryAddress"
                 value={formData.deliveryAddress}
-                onChange={handleChange}
+                onChange={handleInputChange}
                 className="col-span-3"
                 placeholder="Digite o endereço completo"
                 required
@@ -491,7 +503,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
               <Textarea
                 id="notes"
                 value={formData.notes || ""}
-                onChange={handleChange}
+                onChange={handleInputChange}
                 className="col-span-3"
                 placeholder="Observações adicionais (opcional)"
                 rows={3}
@@ -525,10 +537,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
               <Label htmlFor="paymentMethod" className="text-right">
                 Método de Pagamento
               </Label>
-              <Select
-                value={formData.paymentMethod || ""}
-                onValueChange={(value) => handleSelectChange(value, "paymentMethod")}
-              >
+              <Select value={formData.paymentMethod} onValueChange={handleSelectChange("paymentMethod")}>
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Selecione o método" />
                 </SelectTrigger>
@@ -545,10 +554,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
               <Label htmlFor="paymentStatus" className="text-right">
                 Status do Pagamento
               </Label>
-              <Select
-                value={formData.paymentStatus || ""}
-                onValueChange={(value) => handleSelectChange(value, "paymentStatus")}
-              >
+              <Select value={formData.paymentStatus} onValueChange={handleSelectChange("paymentStatus")}>
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Selecione o status" />
                 </SelectTrigger>
@@ -563,7 +569,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
               <Label htmlFor="status" className="text-right">
                 Status do Agendamento
               </Label>
-              <Select value={formData.status || ""} onValueChange={(value) => handleSelectChange(value, "status")}>
+              <Select value={formData.status} onValueChange={handleSelectChange("status")}>
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Selecione o status" />
                 </SelectTrigger>

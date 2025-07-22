@@ -16,7 +16,7 @@ export const POST = withPermission("coupons:validate")(async (req: NextRequest) 
     // Find the coupon
     const coupon = await prisma.v2_coupons.findFirst({
       where: {
-        code: code.toUpperCase(),
+        code: code,
         isActive: true,
         OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }],
       },
@@ -32,7 +32,9 @@ export const POST = withPermission("coupons:validate")(async (req: NextRequest) 
     // Check if coupon has usage limit
     if (coupon.usageLimit !== null) {
       const usageCount = await prisma.v2_bookings.count({
-        where: { couponId: coupon.id },
+        where: {
+          couponId: coupon.id,
+        },
       })
 
       if (usageCount >= coupon.usageLimit) {
@@ -54,7 +56,7 @@ export const POST = withPermission("coupons:validate")(async (req: NextRequest) 
     // Calculate discount
     let discountAmount = 0
     if (coupon.discountType === "percentage") {
-      discountAmount = (orderAmount * Number(coupon.discountValue)) / 100
+      discountAmount = orderAmount * (Number(coupon.discountValue) / 100)
     } else {
       discountAmount = Number(coupon.discountValue)
     }

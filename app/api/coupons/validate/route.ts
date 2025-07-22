@@ -2,52 +2,43 @@ import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { withPermission } from "@/lib/auth"
 
-export const POST = withPermission("coupons:read")(async (req: NextRequest) => {
+export const POST = withPermission("coupons:validate")(async (req: NextRequest) => {
   try {
     const { code, clientId, orderAmount } = await req.json()
 
     if (!code || !clientId || orderAmount === undefined) {
       return NextResponse.json(
-        { isValid: false, reason: "Código do cupom, ID do cliente e valor do pedido são obrigatórios." },
+        { isValid: false, reason: "Código do cupom, cliente e valor do pedido são obrigatórios." },
         { status: 400 },
       )
     }
 
-    // Find the coupon by code
+    // Find the coupon
     const coupon = await prisma.v2_coupons.findFirst({
       where: {
         code: code.toUpperCase(),
         isActive: true,
+        OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }],
       },
     })
 
     if (!coupon) {
       return NextResponse.json({
         isValid: false,
-        reason: "Cupom não encontrado ou inativo.",
+        reason: "Cupom não encontrado ou expirado.",
       })
     }
 
-    // Check if coupon is expired
-    if (coupon.expiresAt && new Date() > coupon.expiresAt) {
-      return NextResponse.json({
-        isValid: false,
-        reason: "Cupom expirado.",
-      })
-    }
-
-    // Check usage limit
+    // Check if coupon has usage limit
     if (coupon.usageLimit !== null) {
       const usageCount = await prisma.v2_bookings.count({
-        where: {
-          couponId: coupon.id,
-        },
+        where: { couponId: coupon.id },
       })
 
       if (usageCount >= coupon.usageLimit) {
         return NextResponse.json({
           isValid: false,
-          reason: "Limite de uso do cupom atingido.",
+          reason: "Cupom atingiu o limite de uso.",
         })
       }
     }
@@ -60,22 +51,7 @@ export const POST = withPermission("coupons:read")(async (req: NextRequest) => {
       })
     }
 
-    // Check if client has already used this coupon (if it's single-use per client)
-    const existingUsage = await prisma.v2_bookings.findFirst({
-      where: {
-        clientId: clientId,
-        couponId: coupon.id,
-      },
-    })
-
-    if (existingUsage && coupon.usageLimit === 1) {
-      return NextResponse.json({
-        isValid: false,
-        reason: "Este cupom já foi utilizado por você.",
-      })
-    }
-
-    // Calculate discount amount
+    // Calculate discount
     let discountAmount = 0
     if (coupon.discountType === "percentage") {
       discountAmount = (orderAmount * Number(coupon.discountValue)) / 100
@@ -93,8 +69,6 @@ export const POST = withPermission("coupons:read")(async (req: NextRequest) => {
         id: coupon.id,
         code: coupon.code,
         name: coupon.name,
-        discountType: coupon.discountType,
-        discountValue: Number(coupon.discountValue),
       },
     })
   } catch (error) {

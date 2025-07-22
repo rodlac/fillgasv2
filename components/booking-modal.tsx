@@ -11,7 +11,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
-import { toast } from "@/components/ui/use-toast"
+import { useToast } from "@/components/ui/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -62,6 +62,8 @@ interface BookingModalProps {
 }
 
 export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalProps) {
+  const { toast } = useToast()
+
   const [formData, setFormData] = useState<Booking>({
     clientId: "",
     deliveryAddress: "",
@@ -121,7 +123,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
     if (isOpen) {
       fetchData()
     }
-  }, [isOpen])
+  }, [isOpen, toast])
 
   useEffect(() => {
     if (booking) {
@@ -191,6 +193,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
   }
 
   const handleSelectChange = (value: string, field: keyof Booking) => {
+    console.log(`Setting ${field} to:`, value)
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -211,6 +214,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
       const newServiceIds = prev.serviceIds.includes(serviceId)
         ? prev.serviceIds.filter((id) => id !== serviceId)
         : [...prev.serviceIds, serviceId]
+      console.log("Updated service IDs:", newServiceIds)
       return { ...prev, serviceIds: newServiceIds }
     })
   }
@@ -262,7 +266,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Form submitted, starting validation...")
+    console.log("Form submitted, current formData:", formData)
 
     // Validation
     if (!formData.clientId) {
@@ -360,7 +364,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
               <Label htmlFor="clientId" className="text-right">
                 Cliente *
               </Label>
-              <Select value={formData.clientId} onValueChange={(value) => handleSelectChange(value, "clientId")}>
+              <Select value={formData.clientId || ""} onValueChange={(value) => handleSelectChange(value, "clientId")}>
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Selecione um cliente" />
                 </SelectTrigger>
@@ -522,7 +526,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
                 Método de Pagamento
               </Label>
               <Select
-                value={formData.paymentMethod}
+                value={formData.paymentMethod || ""}
                 onValueChange={(value) => handleSelectChange(value, "paymentMethod")}
               >
                 <SelectTrigger className="col-span-3">
@@ -542,7 +546,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
                 Status do Pagamento
               </Label>
               <Select
-                value={formData.paymentStatus}
+                value={formData.paymentStatus || ""}
                 onValueChange={(value) => handleSelectChange(value, "paymentStatus")}
               >
                 <SelectTrigger className="col-span-3">
@@ -559,7 +563,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
               <Label htmlFor="status" className="text-right">
                 Status do Agendamento
               </Label>
-              <Select value={formData.status} onValueChange={(value) => handleSelectChange(value, "status")}>
+              <Select value={formData.status || ""} onValueChange={(value) => handleSelectChange(value, "status")}>
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Selecione o status" />
                 </SelectTrigger>

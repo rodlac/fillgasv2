@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -14,10 +13,12 @@ import { CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "@/components/ui/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
 
 interface Client {
   id: string
   name: string
+  email: string
 }
 
 interface Service {
@@ -38,41 +39,47 @@ interface Coupon {
 interface Booking {
   id?: string
   clientId: string
-  bookingDate: string
+  client?: Client
+  deliveryAddress: string
+  deliveryDate: string
   status: string
   amount: number
   discountAmount: number
-  finalAmount: number
   paymentMethod: string
   paymentStatus: string
   couponId: string | null
+  coupon?: Coupon | null
   serviceIds: string[]
+  services?: Service[]
+  notes?: string
 }
 
 interface BookingModalProps {
   isOpen: boolean
   onClose: () => void
+  onSave: () => void
   booking: Booking | null
 }
 
-export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
+export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalProps) {
   const [formData, setFormData] = useState<Booking>({
     clientId: "",
-    bookingDate: new Date().toISOString(),
-    status: "pending",
+    deliveryAddress: "",
+    deliveryDate: new Date().toISOString(),
+    status: "scheduled",
     amount: 0,
     discountAmount: 0,
-    finalAmount: 0,
     paymentMethod: "pix",
     paymentStatus: "pending",
     couponId: null,
     serviceIds: [],
+    notes: "",
   })
   const [loading, setLoading] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
   const [services, setServices] = useState<Service[]>([])
   const [coupons, setCoupons] = useState<Coupon[]>([])
-  const [selectedCouponCode, setSelectedCouponCode] = useState<string | null>(null)
+  const [selectedCouponCode, setSelectedCouponCode] = useState<string>("")
   const [couponValidationResult, setCouponValidationResult] = useState<{
     isValid: boolean
     discountAmount?: number
@@ -93,9 +100,9 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
         const servicesData = await servicesRes.json()
         const couponsData = await couponsRes.json()
 
-        setClients(clientsData.clients || [])
-        setServices(servicesData || [])
-        setCoupons(couponsData || [])
+        setClients(Array.isArray(clientsData) ? clientsData : clientsData.clients || [])
+        setServices(Array.isArray(servicesData) ? servicesData : [])
+        setCoupons(Array.isArray(couponsData) ? couponsData : [])
       } catch (error) {
         console.error("Failed to fetch initial data:", error)
         toast({
@@ -105,8 +112,11 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
         })
       }
     }
-    fetchData()
-  }, [])
+
+    if (isOpen) {
+      fetchData()
+    }
+  }, [isOpen])
 
   useEffect(() => {
     if (booking) {
@@ -114,28 +124,39 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
         ...booking,
         amount: Number(booking.amount),
         discountAmount: Number(booking.discountAmount),
-        finalAmount: Number(booking.finalAmount),
-        bookingDate: new Date(booking.bookingDate).toISOString(),
-        serviceIds: booking.services.map((s) => s.id),
+        deliveryDate: new Date(booking.deliveryDate).toISOString(),
+        serviceIds: booking.services?.map((s) => s.id) || [],
       })
-      setSelectedCouponCode(booking.coupon?.code || null)
+      setSelectedCouponCode(booking.coupon?.code || "")
+      if (booking.coupon) {
+        setCouponValidationResult({
+          isValid: true,
+          discountAmount: Number(booking.discountAmount),
+          coupon: {
+            id: booking.coupon.id,
+            code: booking.coupon.code,
+            name: booking.coupon.name,
+          },
+        })
+      }
     } else {
       setFormData({
         clientId: "",
-        bookingDate: new Date().toISOString(),
-        status: "pending",
+        deliveryAddress: "",
+        deliveryDate: new Date().toISOString(),
+        status: "scheduled",
         amount: 0,
         discountAmount: 0,
-        finalAmount: 0,
         paymentMethod: "pix",
         paymentStatus: "pending",
         couponId: null,
         serviceIds: [],
+        notes: "",
       })
-      setSelectedCouponCode(null)
+      setSelectedCouponCode("")
       setCouponValidationResult(null)
     }
-  }, [booking])
+  }, [booking, isOpen])
 
   useEffect(() => {
     // Calculate amount based on selected services
@@ -153,7 +174,6 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
     setFormData((prev) => ({
       ...prev,
       discountAmount: discount,
-      finalAmount: Math.max(0, prev.amount - discount),
     }))
   }, [formData.amount, couponValidationResult])
 
@@ -176,7 +196,7 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
     if (date) {
       setFormData((prev) => ({
         ...prev,
-        bookingDate: date.toISOString(),
+        deliveryDate: date.toISOString(),
       }))
     }
   }
@@ -192,8 +212,8 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
 
   const handleCouponCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedCouponCode(e.target.value)
-    setCouponValidationResult(null) // Reset validation on change
-    setFormData((prev) => ({ ...prev, couponId: null })) // Clear couponId until validated
+    setCouponValidationResult(null)
+    setFormData((prev) => ({ ...prev, couponId: null }))
   }
 
   const handleValidateCoupon = async () => {
@@ -233,6 +253,25 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
     e.preventDefault()
     setLoading(true)
 
+    // Validation
+    if (!formData.clientId) {
+      toast({ title: "Erro", description: "Selecione um cliente.", variant: "destructive" })
+      setLoading(false)
+      return
+    }
+
+    if (!formData.deliveryAddress.trim()) {
+      toast({ title: "Erro", description: "Endereço de entrega é obrigatório.", variant: "destructive" })
+      setLoading(false)
+      return
+    }
+
+    if (formData.serviceIds.length === 0) {
+      toast({ title: "Erro", description: "Selecione pelo menos um serviço.", variant: "destructive" })
+      setLoading(false)
+      return
+    }
+
     if (selectedCouponCode && !couponValidationResult?.isValid) {
       toast({
         title: "Atenção",
@@ -246,12 +285,20 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
     try {
       const method = booking ? "PUT" : "POST"
       const url = booking ? `/api/bookings/${booking.id}` : "/api/bookings"
+
+      const payload = {
+        ...formData,
+        deliveryDate: formData.deliveryDate,
+        amount: formData.amount,
+        discountAmount: formData.discountAmount,
+      }
+
       const res = await fetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
@@ -263,6 +310,7 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
         title: "Sucesso",
         description: `Agendamento ${booking ? "atualizado" : "criado"} com sucesso.`,
       })
+      onSave()
       onClose()
     } catch (error: any) {
       console.error("Failed to save booking:", error)
@@ -276,9 +324,11 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
     }
   }
 
+  const finalAmount = Math.max(0, formData.amount - formData.discountAmount)
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[700px]">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{booking ? "Editar Agendamento" : "Novo Agendamento"}</DialogTitle>
         </DialogHeader>
@@ -286,7 +336,7 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="clientId" className="text-right">
-                Cliente
+                Cliente *
               </Label>
               <Select value={formData.clientId} onValueChange={(value) => handleSelectChange(value, "clientId")}>
                 <SelectTrigger className="col-span-3">
@@ -295,7 +345,7 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
                 <SelectContent>
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
-                      {client.name}
+                      {client.name} - {client.email}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -303,15 +353,29 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="bookingDate" className="text-right">
-                Data e Hora
+              <Label htmlFor="deliveryAddress" className="text-right">
+                Endereço de Entrega *
+              </Label>
+              <Input
+                id="deliveryAddress"
+                value={formData.deliveryAddress}
+                onChange={handleChange}
+                className="col-span-3"
+                placeholder="Digite o endereço completo"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="deliveryDate" className="text-right">
+                Data e Hora *
               </Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant={"outline"} className="col-span-3 justify-start text-left font-normal">
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.bookingDate ? (
-                      format(new Date(formData.bookingDate), "dd/MM/yyyy HH:mm")
+                    {formData.deliveryDate ? (
+                      format(new Date(formData.deliveryDate), "dd/MM/yyyy HH:mm")
                     ) : (
                       <span>Selecione uma data e hora</span>
                     )}
@@ -320,19 +384,19 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
                 <PopoverContent className="w-auto p-0">
                   <Calendar
                     mode="single"
-                    selected={new Date(formData.bookingDate)}
+                    selected={new Date(formData.deliveryDate)}
                     onSelect={handleDateChange}
                     initialFocus
                   />
                   <div className="p-3 border-t border-gray-200">
                     <Input
                       type="time"
-                      value={format(new Date(formData.bookingDate), "HH:mm")}
+                      value={format(new Date(formData.deliveryDate), "HH:mm")}
                       onChange={(e) => {
                         const [hours, minutes] = e.target.value.split(":").map(Number)
-                        const newDate = new Date(formData.bookingDate)
+                        const newDate = new Date(formData.deliveryDate)
                         newDate.setHours(hours, minutes)
-                        setFormData((prev) => ({ ...prev, bookingDate: newDate.toISOString() }))
+                        setFormData((prev) => ({ ...prev, deliveryDate: newDate.toISOString() }))
                       }}
                     />
                   </div>
@@ -341,8 +405,8 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
             </div>
 
             <div className="grid grid-cols-4 items-start gap-4">
-              <Label className="text-right pt-2">Serviços</Label>
-              <div className="col-span-3 grid grid-cols-2 gap-2">
+              <Label className="text-right pt-2">Serviços *</Label>
+              <div className="col-span-3 grid grid-cols-1 gap-2 max-h-32 overflow-y-auto">
                 {services.map((service) => (
                   <div key={service.id} className="flex items-center space-x-2">
                     <Checkbox
@@ -350,7 +414,7 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
                       checked={formData.serviceIds.includes(service.id)}
                       onCheckedChange={() => handleServiceToggle(service.id)}
                     />
-                    <Label htmlFor={`service-${service.id}`}>
+                    <Label htmlFor={`service-${service.id}`} className="text-sm">
                       {service.name} (R$ {Number(service.price).toFixed(2)})
                     </Label>
                   </div>
@@ -365,7 +429,7 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
               <div className="col-span-3 flex gap-2">
                 <Input
                   id="couponCode"
-                  value={selectedCouponCode || ""}
+                  value={selectedCouponCode}
                   onChange={handleCouponCodeChange}
                   placeholder="Código do cupom (opcional)"
                 />
@@ -373,64 +437,65 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
                   type="button"
                   onClick={handleValidateCoupon}
                   disabled={loading || !selectedCouponCode || !formData.clientId}
+                  size="sm"
                 >
                   Validar
                 </Button>
               </div>
             </div>
             {couponValidationResult && (
-              <div className="col-span-4 col-start-2 text-sm">
-                {couponValidationResult.isValid ? (
-                  <p className="text-green-600">
-                    Cupom válido! Desconto: R$ {Number(couponValidationResult.discountAmount).toFixed(2)}
-                  </p>
-                ) : (
-                  <p className="text-red-600">Cupom inválido: {couponValidationResult.reason}</p>
-                )}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <div></div>
+                <div className="col-span-3 text-sm">
+                  {couponValidationResult.isValid ? (
+                    <p className="text-green-600">
+                      ✓ Cupom válido! Desconto: R$ {Number(couponValidationResult.discountAmount).toFixed(2)}
+                    </p>
+                  ) : (
+                    <p className="text-red-600">✗ {couponValidationResult.reason}</p>
+                  )}
+                </div>
               </div>
             )}
 
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="amount" className="text-right">
-                Valor Original
+              <Label htmlFor="notes" className="text-right">
+                Observações
               </Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                value={Number(formData.amount).toFixed(2)}
-                readOnly
-                className="col-span-3 bg-gray-100"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="discountAmount" className="text-right">
-                Desconto
-              </Label>
-              <Input
-                id="discountAmount"
-                type="number"
-                step="0.01"
-                value={Number(formData.discountAmount).toFixed(2)}
-                readOnly
-                className="col-span-3 bg-gray-100"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="finalAmount" className="text-right">
-                Valor Final
-              </Label>
-              <Input
-                id="finalAmount"
-                type="number"
-                step="0.01"
-                value={Number(formData.finalAmount).toFixed(2)}
-                readOnly
-                className="col-span-3 font-bold text-lg bg-gray-100"
+              <Textarea
+                id="notes"
+                value={formData.notes || ""}
+                onChange={handleChange}
+                className="col-span-3"
+                placeholder="Observações adicionais (opcional)"
+                rows={3}
               />
             </div>
 
+            <div className="grid grid-cols-4 items-center gap-4 pt-4 border-t">
+              <Label className="text-right">Valor dos Serviços</Label>
+              <Input value={`R$ ${Number(formData.amount).toFixed(2)}`} className="col-span-3 bg-gray-50" readOnly />
+            </div>
+            {formData.discountAmount > 0 && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Desconto</Label>
+                <Input
+                  value={`- R$ ${Number(formData.discountAmount).toFixed(2)}`}
+                  className="col-span-3 bg-gray-50 text-green-600"
+                  readOnly
+                />
+              </div>
+            )}
             <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right font-bold">Valor Final</Label>
+              <Input
+                value={`R$ ${finalAmount.toFixed(2)}`}
+                className="col-span-3 font-bold text-lg bg-blue-50"
+                readOnly
+              />
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4 pt-4 border-t">
               <Label htmlFor="paymentMethod" className="text-right">
                 Método de Pagamento
               </Label>
@@ -446,6 +511,7 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
                   <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
                   <SelectItem value="debit_card">Cartão de Débito</SelectItem>
                   <SelectItem value="cash">Dinheiro</SelectItem>
+                  <SelectItem value="bank_transfer">Transferência Bancária</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -462,7 +528,7 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pending">Pendente</SelectItem>
-                  <SelectItem value="paid">Pago</SelectItem>
+                  <SelectItem value="confirmed">Confirmado</SelectItem>
                   <SelectItem value="failed">Falhou</SelectItem>
                 </SelectContent>
               </Select>
@@ -476,16 +542,19 @@ export function BookingModal({ isOpen, onClose, booking }: BookingModalProps) {
                   <SelectValue placeholder="Selecione o status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pending">Pendente</SelectItem>
+                  <SelectItem value="scheduled">Agendado</SelectItem>
                   <SelectItem value="confirmed">Confirmado</SelectItem>
-                  <SelectItem value="in_route">Em Rota</SelectItem>
+                  <SelectItem value="out_for_delivery">Saiu para Entrega</SelectItem>
                   <SelectItem value="delivered">Entregue</SelectItem>
-                  <SelectItem value="cancelled">Cancelado</SelectItem>
+                  <SelectItem value="canceled">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+              Cancelar
+            </Button>
             <Button type="submit" disabled={loading}>
               {loading ? "Salvando..." : "Salvar"}
             </Button>

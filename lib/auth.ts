@@ -1,64 +1,60 @@
-import { createServerSupabaseClient } from "@/lib/supabase-server"
-import { redirect } from "next/navigation"
-import { NextResponse, type NextRequest } from "next/server"
-
-// Define a type for the handler function
-type Handler = (req: NextRequest, ...args: any[]) => Promise<NextResponse | Response>
-
-// This is a placeholder for actual permission checking logic
-// In a real application, you would check user roles/permissions from the session
-const checkPermission = async (session: any, requiredPermission: string) => {
-  if (!session) {
-    return false // No session, no permission
-  }
-  // Example: Check if user has an 'admin' role or specific permission
-  // This would involve fetching user roles/permissions from your database
-  // For now, let's assume all authenticated users have all permissions for simplicity
-  return true
-}
-
-export const withPermission =
-  (requiredPermission: string) =>
-  (handler: Handler) =>
-  async (req: NextRequest, ...args: any[]) => {
-    const supabase = createServerSupabaseClient()
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-    }
-
-    const hasPermission = await checkPermission(session, requiredPermission)
-
-    if (!hasPermission) {
-      return NextResponse.json({ message: "Forbidden: Insufficient permissions" }, { status: 403 })
-    }
-
-    return handler(req, ...args)
-  }
-
-export async function getSession() {
-  const supabase = createServerSupabaseClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  return session
-}
+import { createServerClient } from "@supabase/ssr"
+import { type NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
 
 export async function getUser() {
-  const supabase = createServerSupabaseClient()
+  const cookieStore = await cookies()
+
+  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll()
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+        } catch {
+          // The `setAll` method was called from a Server Component.
+          // This can be ignored if you have middleware refreshing
+          // user sessions.
+        }
+      },
+    },
+  })
+
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser()
+
+  if (error || !user) {
+    return null
+  }
+
   return user
 }
 
-export async function requireAuth() {
-  const session = await getSession()
-  if (!session) {
-    redirect("/login")
-  }
-  return session
+export function withPermission(permission: string) {
+  return <T extends any[]>(handler: (req: NextRequest, ...args: T) => Promise<NextResponse>) =>
+    async (req: NextRequest, ...args: T): Promise<NextResponse> => {
+      try {
+        const user = await getUser()
+
+        if (!user) {
+          return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
+        // For now, we'll allow all authenticated users
+        // In the future, you can implement role-based permissions here
+        // const userPermissions = user.user_metadata?.permissions || []
+        // if (!userPermissions.includes(permission)) {
+        //   return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        // }
+
+        return handler(req, ...args)
+      } catch (error) {
+        console.error("Auth error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+      }
+    }
 }

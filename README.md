@@ -37,6 +37,10 @@ DATABASE_URL="sua-url-do-supabase-postgres"
 NEXT_PUBLIC_SUPABASE_URL="sua-url-do-supabase"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="sua-chave-anonima-do-supabase"
 SUPABASE_SERVICE_ROLE_KEY="sua-chave-de-servico-do-supabase"
+
+# Next.js
+NEXTAUTH_SECRET="uma-string-longa-e-aleatoria-para-seguranca"
+NEXTAUTH_URL="http://localhost:3000" # Para desenvolvimento local
 \`\`\`
 
 ### 3. Configure o banco de dados
@@ -166,6 +170,3 @@ npm run lint
 ## 📞 Suporte
 
 Para dúvidas ou problemas, abra uma issue no repositório.
-\`\`\`
-
-Configuração do Next.js:

@@ -1,12 +1,12 @@
 "use client"
 
 import type React from "react"
+
 import { useState, useEffect } from "react"
-import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
 import {
   Dialog,
   DialogContent,
@@ -20,67 +20,78 @@ import { useToast } from "@/hooks/use-toast"
 interface Service {
   id: string
   name: string
-  description: string
   price: number
+  isActive: boolean
 }
 
 interface ServiceModalProps {
-  isOpen: boolean
+  open: boolean
   onClose: () => void
-  onSave: () => void
-  service: Service | null
+  service?: Service | null
 }
 
-export function ServiceModal({ isOpen, onClose, onSave, service }: ServiceModalProps) {
-  const [name, setName] = useState("")
-  const [description, setDescription] = useState("")
-  const [price, setPrice] = useState<number>(0)
+export function ServiceModal({ open, onClose, service }: ServiceModalProps) {
+  const [formData, setFormData] = useState({
+    name: "",
+    price: "",
+    isActive: true,
+  })
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
     if (service) {
-      setName(service.name)
-      setDescription(service.description)
-      setPrice(service.price)
+      setFormData({
+        name: service.name,
+        price: service.price.toString(),
+        isActive: service.isActive,
+      })
     } else {
-      setName("")
-      setDescription("")
-      setPrice(0)
+      setFormData({
+        name: "",
+        price: "",
+        isActive: true,
+      })
     }
-  }, [service, isOpen])
+  }, [service])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
-    const serviceData = { name, description, price }
-
     try {
-      if (service) {
-        // Update existing service
-        const { error } = await supabase.from("services").update(serviceData).eq("id", service.id)
+      const url = service ? `/api/services/${service.id}` : "/api/services"
+      const method = service ? "PUT" : "POST"
 
-        if (error) throw error
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...formData,
+          price: Number.parseFloat(formData.price),
+        }),
+      })
+
+      if (response.ok) {
         toast({
-          title: "Serviço atualizado",
-          description: "As informações do serviço foram salvas com sucesso.",
+          title: "Sucesso",
+          description: `Serviço ${service ? "atualizado" : "criado"} com sucesso`,
         })
+        onClose()
       } else {
-        // Add new service
-        const { error } = await supabase.from("services").insert(serviceData)
-
-        if (error) throw error
+        const error = await response.json()
         toast({
-          title: "Serviço adicionado",
-          description: "Novo serviço cadastrado com sucesso.",
+          title: "Erro",
+          description: error.error || "Erro ao salvar serviço",
+          variant: "destructive",
         })
       }
-      onSave()
-    } catch (error: any) {
+    } catch (error) {
       toast({
-        title: "Erro ao salvar serviço",
-        description: error.message,
+        title: "Erro",
+        description: "Erro ao salvar serviço",
         variant: "destructive",
       })
     } finally {
@@ -89,14 +100,12 @@ export function ServiceModal({ isOpen, onClose, onSave, service }: ServiceModalP
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{service ? "Editar Serviço" : "Adicionar Serviço"}</DialogTitle>
+          <DialogTitle>{service ? "Editar Serviço" : "Novo Serviço"}</DialogTitle>
           <DialogDescription>
-            {service
-              ? "Faça alterações nas informações do serviço."
-              : "Preencha os dados para adicionar um novo serviço."}
+            {service ? "Atualize as informações do serviço" : "Preencha os dados do novo serviço"}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -105,16 +114,10 @@ export function ServiceModal({ isOpen, onClose, onSave, service }: ServiceModalP
               <Label htmlFor="name" className="text-right">
                 Nome
               </Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3" required />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="description" className="text-right">
-                Descrição
-              </Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="col-span-3"
                 required
               />
@@ -126,14 +129,26 @@ export function ServiceModal({ isOpen, onClose, onSave, service }: ServiceModalP
               <Input
                 id="price"
                 type="number"
-                value={price}
-                onChange={(e) => setPrice(Number.parseFloat(e.target.value))}
+                step="0.01"
+                value={formData.price}
+                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                 className="col-span-3"
                 required
               />
             </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="isActive"
+                checked={formData.isActive}
+                onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+              />
+              <Label htmlFor="isActive">Ativo</Label>
+            </div>
           </div>
           <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
             <Button type="submit" disabled={loading}>
               {loading ? "Salvando..." : "Salvar"}
             </Button>

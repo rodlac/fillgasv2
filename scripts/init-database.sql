@@ -1,22 +1,27 @@
--- This script is for initializing a PostgreSQL database for the FillGás project.
--- It includes creating the database and setting up the necessary extensions.
--- This script should be run with a superuser role (e.g., 'postgres').
+-- Create initial roles
+INSERT INTO v2_roles (id, name, display_name, description, permissions, is_system_role, is_active) VALUES
+('admin-role', 'admin', 'Administrador', 'Acesso total ao sistema', '["*"]', true, true),
+('user-role', 'user', 'Usuário', 'Acesso básico ao sistema', '["clients:read", "bookings:read", "services:read"]', true, true);
 
--- Drop database if it exists (for development/reset purposes)
--- WARNING: This will delete all data in the 'fillgas_db' database.
--- Uncomment the line below if you want to drop the database before creating it.
--- DROP DATABASE IF EXISTS fillgas_db;
+-- Create initial admin user (password should be hashed in production)
+INSERT INTO v2_users (id, email, first_name, last_name, role, is_active, permissions) VALUES
+('admin-user', 'admin@fillgas.com', 'Admin', 'Sistema', 'admin', true, '["*"]');
 
--- Create the database
-CREATE DATABASE fillgas_db;
+-- Create initial payment methods
+INSERT INTO v2_payment_methods (method, display_name, is_active, fixed_fee, percentage_fee, pass_fees_to_client) VALUES
+('PIX', 'PIX', true, 0.00, 0.0099, false),
+('CREDIT_CARD', 'Cartão de Crédito', true, 0.39, 0.0399, false),
+('BOLETO', 'Boleto Bancário', true, 3.49, 0.0000, false),
+('BANK_TRANSFER', 'Transferência Bancária', true, 0.00, 0.0000, false);
 
--- Connect to the newly created database
-\c fillgas_db;
+-- Create sample services
+INSERT INTO v2_services (name, price, is_active) VALUES
+('Cilindro CO2 5kg', 45.00, true),
+('Cilindro CO2 10kg', 85.00, true),
+('Cilindro CO2 15kg', 120.00, true),
+('Troca de Cilindro 5kg', 35.00, true),
+('Troca de Cilindro 10kg', 65.00, true);
 
--- Enable the "uuid-ossp" extension for generating UUIDs
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- You can now run your 'create-tables.sql' and 'init-data.sql' scripts.
--- Example:
--- \i /path/to/your/create-tables.sql
--- \i /path/to/your/init-data.sql
+-- Create sample coupon
+INSERT INTO v2_coupons (code, name, discount_type, discount_value, minimum_amount, max_usage, current_usage, max_usage_per_user, valid_from, valid_until, is_active) VALUES
+('PRIMEIRA10', 'Desconto Primeira Compra', 'percentage', 10.00, 50.00, 100, 0, 1, NOW(), NOW() + INTERVAL '30 days', true);

@@ -1,27 +1,65 @@
-import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { withPermission } from "@/lib/auth"
 
-export async function GET() {
-  try {
-    const clients = await prisma.client.findMany()
-    return NextResponse.json(clients)
-  } catch (error) {
-    console.error("Error fetching clients:", error)
-    return NextResponse.json({ error: "Failed to fetch clients" }, { status: 500 })
+export const GET = withPermission("clients:read")(async (req: NextRequest) => {
+  const { searchParams } = new URL(req.url)
+  const search = searchParams.get("search") || ""
+  const limit = Number.parseInt(searchParams.get("limit") || "10")
+  const offset = Number.parseInt(searchParams.get("offset") || "0")
+
+  const where = search
+    ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { email: { contains: search, mode: "insensitive" } },
+          { cpf: { contains: search, mode: "insensitive" } },
+          { phone: { contains: search, mode: "insensitive" } },
+        ],
+      }
+    : {}
+
+  const [clients, total] = await Promise.all([
+    prisma.v2_clients.findMany({
+      where,
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.v2_clients.count({ where }),
+  ])
+
+  return Response.json({ clients, total })
+})
+
+export const POST = withPermission("clients:create")(async (req: NextRequest) => {
+  const body = await req.json()
+  const { name, email, cpf, phone, address, postalCode, cylinderType } = body
+
+  // Check if CPF already exists
+  const existingClient = await prisma.v2_clients.findUnique({
+    where: { cpf },
+  })
+
+  if (existingClient) {
+    return Response.json({ error: "CPF já cadastrado" }, { status: 400 })
   }
-}
 
-export async function POST(request: Request) {
   try {
-    const { name, email, phone, address } = await request.json()
-
-    const newClient = await prisma.client.create({
-      data: { name, email, phone, address },
+    const client = await prisma.v2_clients.create({
+      data: {
+        name,
+        email,
+        cpf,
+        phone,
+        address,
+        postalCode,
+        cylinderType,
+      },
     })
 
-    return NextResponse.json(newClient, { status: 201 })
+    return Response.json(client, { status: 201 })
   } catch (error) {
-    console.error("Error creating client:", error)
-    return NextResponse.json({ error: "Failed to create client" }, { status: 500 })
+    return Response.json({ error: "Erro ao criar cliente" }, { status: 500 })
   }
-}
+})

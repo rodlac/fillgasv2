@@ -1,28 +1,35 @@
 "use client"
 
+import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Menu } from "lucide-react"
-import { ModeToggle } from "./mode-toggle"
-import { Sidebar } from "./sidebar" // Importe o Sidebar aqui
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { User, LogOut } from "lucide-react"
 
 export function Header() {
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+  }
+
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 lg:hidden">
-      <Sheet>
-        <SheetTrigger asChild>
-          <Button size="icon" variant="outline" className="sm:hidden bg-transparent">
-            <Menu className="h-5 w-5" />
-            <span className="sr-only">Toggle Menu</span>
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="sm:max-w-xs">
-          <Sidebar /> {/* Renderize o Sidebar dentro do SheetContent */}
-        </SheetContent>
-      </Sheet>
-      <div className="ml-auto flex items-center gap-4">
-        <ModeToggle />
+    <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+      <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
+        <div className="flex flex-1"></div>
+        <div className="flex items-center gap-x-4 lg:gap-x-6">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <User className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Sair
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
-    </header>
+    </div>
   )
 }

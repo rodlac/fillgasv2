@@ -23,7 +23,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -34,14 +34,20 @@ export default function LoginPage() {
           description: error.message,
           variant: "destructive",
         })
+      } else if (data.session) {
+        toast({
+          title: "Sucesso",
+          description: "Login realizado com sucesso!",
+        })
+
+        // Aguarda um pouco para garantir que a sessão foi estabelecida
+        setTimeout(() => {
+          router.push("/dashboard")
+          router.refresh()
+        }, 100)
       }
-      // Removido: router.push("/dashboard")
-      // O middleware agora cuidará do redirecionamento se a autenticação for bem-sucedida.
-      // Uma atualização da página ou navegação para qualquer rota protegida fará com que o middleware atue.
-      // Para forçar uma reavaliação imediata pelo middleware, você pode usar router.refresh()
-      // ou window.location.reload(), mas geralmente não é necessário se o middleware estiver configurado corretamente.
-      router.refresh() // Força uma reavaliação da rota pelo middleware
     } catch (error) {
+      console.error("Erro no login:", error)
       toast({
         title: "Erro no login",
         description: "Ocorreu um erro inesperado",
@@ -63,7 +69,14 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={loading}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
@@ -73,6 +86,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>

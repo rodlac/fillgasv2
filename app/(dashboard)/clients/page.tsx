@@ -1,153 +1,158 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useToast } from "@/hooks/use-toast"
+import { Badge } from "@/components/ui/badge"
+import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { ClientModal } from "@/components/client-modal"
+import { useToast } from "@/hooks/use-toast"
 
 interface Client {
   id: string
   name: string
   email: string
+  cpf: string
   phone: string
   address: string
+  postalCode: string
+  cylinderType?: string
+  isActive: boolean
+  createdAt: string
 }
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingClient, setEditingClient] = useState<Client | null>(null)
+  const [search, setSearch] = useState("")
+  const [showModal, setShowModal] = useState(false)
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const { toast } = useToast()
+
+  const fetchClients = async () => {
+    try {
+      const response = await fetch(`/api/clients?search=${search}`)
+      const data = await response.json()
+      setClients(data.clients)
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar clientes",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     fetchClients()
-  }, [])
+  }, [search])
 
-  const fetchClients = async () => {
-    setLoading(true)
-    const { data, error } = await supabase.from("clients").select("*")
-    if (error) {
-      toast({
-        title: "Erro ao carregar clientes",
-        description: error.message,
-        variant: "destructive",
-      })
-    } else {
-      setClients(data || [])
-    }
-    setLoading(false)
+  const handleEdit = (client: Client) => {
+    setSelectedClient(client)
+    setShowModal(true)
   }
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Tem certeza que deseja excluir este cliente?")) {
-      return
-    }
-    const { error } = await supabase.from("clients").delete().eq("id", id)
-    if (error) {
-      toast({
-        title: "Erro ao excluir cliente",
-        description: error.message,
-        variant: "destructive",
-      })
-    } else {
-      toast({
-        title: "Cliente excluído",
-        description: "O cliente foi removido com sucesso.",
-      })
-      fetchClients()
+    if (confirm("Tem certeza que deseja desativar este cliente?")) {
+      try {
+        await fetch(`/api/clients/${id}`, { method: "DELETE" })
+        toast({
+          title: "Sucesso",
+          description: "Cliente desativado com sucesso",
+        })
+        fetchClients()
+      } catch (error) {
+        toast({
+          title: "Erro",
+          description: "Erro ao desativar cliente",
+          variant: "destructive",
+        })
+      }
     }
   }
 
-  const handleSaveClient = () => {
+  const handleModalClose = () => {
+    setShowModal(false)
+    setSelectedClient(null)
     fetchClients()
-    setIsModalOpen(false)
-    setEditingClient(null)
   }
-
-  const filteredClients = clients.filter(
-    (client) =>
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.phone.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-      </div>
-    )
+    return <div>Carregando...</div>
   }
 
   return (
-    <div className="container mx-auto py-10">
-      <h1 className="text-3xl font-bold mb-6">Clientes</h1>
-      <div className="flex justify-between items-center mb-4">
-        <Input
-          placeholder="Buscar clientes..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
-        />
-        <Button
-          onClick={() => {
-            setEditingClient(null)
-            setIsModalOpen(true)
-          }}
-        >
-          Adicionar Cliente
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
+          <p className="text-gray-600">Gerencie sua base de clientes</p>
+        </div>
+        <Button onClick={() => setShowModal(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Novo Cliente
         </Button>
       </div>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nome</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Telefone</TableHead>
-              <TableHead>Endereço</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredClients.map((client) => (
-              <TableRow key={client.id}>
-                <TableCell className="font-medium">{client.name}</TableCell>
-                <TableCell>{client.email}</TableCell>
-                <TableCell>{client.phone}</TableCell>
-                <TableCell>{client.address}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setEditingClient(client)
-                      setIsModalOpen(true)
-                    }}
-                  >
-                    Editar
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(client.id)}>
-                    Excluir
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
 
-      <ClientModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveClient}
-        client={editingClient}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Lista de Clientes</CardTitle>
+          <div className="flex items-center space-x-2">
+            <Search className="h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Buscar por nome, CPF ou telefone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>CPF</TableHead>
+                <TableHead>Telefone</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {clients.map((client) => (
+                <TableRow key={client.id}>
+                  <TableCell className="font-medium">{client.name}</TableCell>
+                  <TableCell>{client.email}</TableCell>
+                  <TableCell>{client.cpf}</TableCell>
+                  <TableCell>{client.phone}</TableCell>
+                  <TableCell>
+                    <Badge variant={client.isActive ? "default" : "secondary"}>
+                      {client.isActive ? "Ativo" : "Inativo"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(client)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleDelete(client.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <ClientModal open={showModal} onClose={handleModalClose} client={selectedClient} />
     </div>
   )
 }

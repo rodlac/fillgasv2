@@ -1,51 +1,20 @@
-import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { withPermission } from "@/lib/auth"
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const { id } = params
-    const service = await prisma.service.findUnique({
-      where: { id },
-    })
+export const PUT = withPermission("services:update")(
+  async (req: NextRequest, { params }: { params: { id: string } }) => {
+    const body = await req.json()
 
-    if (!service) {
-      return NextResponse.json({ error: "Service not found" }, { status: 404 })
+    try {
+      const service = await prisma.v2_services.update({
+        where: { id: params.id },
+        data: body,
+      })
+
+      return Response.json(service)
+    } catch (error) {
+      return Response.json({ error: "Erro ao atualizar serviço" }, { status: 500 })
     }
-
-    return NextResponse.json(service)
-  } catch (error) {
-    console.error("Error fetching service:", error)
-    return NextResponse.json({ error: "Failed to fetch service" }, { status: 500 })
-  }
-}
-
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const { id } = params
-    const { name, description, price } = await request.json()
-
-    const updatedService = await prisma.service.update({
-      where: { id },
-      data: { name, description, price },
-    })
-
-    return NextResponse.json(updatedService)
-  } catch (error) {
-    console.error("Error updating service:", error)
-    return NextResponse.json({ error: "Failed to update service" }, { status: 500 })
-  }
-}
-
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const { id } = params
-    await prisma.service.delete({
-      where: { id },
-    })
-
-    return NextResponse.json({}, { status: 204 })
-  } catch (error) {
-    console.error("Error deleting service:", error)
-    return NextResponse.json({ error: "Failed to delete service" }, { status: 500 })
-  }
-}
+  },
+)

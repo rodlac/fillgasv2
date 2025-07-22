@@ -3,7 +3,6 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,70 +20,91 @@ interface Client {
   id: string
   name: string
   email: string
+  cpf: string
   phone: string
   address: string
+  postalCode: string
+  cylinderType?: string
+  isActive: boolean
 }
 
 interface ClientModalProps {
-  isOpen: boolean
+  open: boolean
   onClose: () => void
-  onSave: () => void
-  client: Client | null
+  client?: Client | null
 }
 
-export function ClientModal({ isOpen, onClose, onSave, client }: ClientModalProps) {
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [phone, setPhone] = useState("")
-  const [address, setAddress] = useState("")
+export function ClientModal({ open, onClose, client }: ClientModalProps) {
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    cpf: "",
+    phone: "",
+    address: "",
+    postalCode: "",
+    cylinderType: "",
+  })
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
     if (client) {
-      setName(client.name)
-      setEmail(client.email)
-      setPhone(client.phone)
-      setAddress(client.address)
+      setFormData({
+        name: client.name,
+        email: client.email,
+        cpf: client.cpf,
+        phone: client.phone,
+        address: client.address,
+        postalCode: client.postalCode,
+        cylinderType: client.cylinderType || "",
+      })
     } else {
-      setName("")
-      setEmail("")
-      setPhone("")
-      setAddress("")
+      setFormData({
+        name: "",
+        email: "",
+        cpf: "",
+        phone: "",
+        address: "",
+        postalCode: "",
+        cylinderType: "",
+      })
     }
-  }, [client, isOpen])
+  }, [client])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
-    const clientData = { name, email, phone, address }
-
     try {
-      if (client) {
-        // Update existing client
-        const { error } = await supabase.from("clients").update(clientData).eq("id", client.id)
+      const url = client ? `/api/clients/${client.id}` : "/api/clients"
+      const method = client ? "PUT" : "POST"
 
-        if (error) throw error
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
+
+      if (response.ok) {
         toast({
-          title: "Cliente atualizado",
-          description: "As informações do cliente foram salvas com sucesso.",
+          title: "Sucesso",
+          description: `Cliente ${client ? "atualizado" : "criado"} com sucesso`,
         })
+        onClose()
       } else {
-        // Add new client
-        const { error } = await supabase.from("clients").insert(clientData)
-
-        if (error) throw error
+        const error = await response.json()
         toast({
-          title: "Cliente adicionado",
-          description: "Novo cliente cadastrado com sucesso.",
+          title: "Erro",
+          description: error.error || "Erro ao salvar cliente",
+          variant: "destructive",
         })
       }
-      onSave()
-    } catch (error: any) {
+    } catch (error) {
       toast({
-        title: "Erro ao salvar cliente",
-        description: error.message,
+        title: "Erro",
+        description: "Erro ao salvar cliente",
         variant: "destructive",
       })
     } finally {
@@ -93,14 +113,12 @@ export function ClientModal({ isOpen, onClose, onSave, client }: ClientModalProp
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{client ? "Editar Cliente" : "Adicionar Cliente"}</DialogTitle>
+          <DialogTitle>{client ? "Editar Cliente" : "Novo Cliente"}</DialogTitle>
           <DialogDescription>
-            {client
-              ? "Faça alterações nas informações do cliente."
-              : "Preencha os dados para adicionar um novo cliente."}
+            {client ? "Atualize as informações do cliente" : "Preencha os dados do novo cliente"}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -109,7 +127,13 @@ export function ClientModal({ isOpen, onClose, onSave, client }: ClientModalProp
               <Label htmlFor="name" className="text-right">
                 Nome
               </Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3" required />
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="col-span-3"
+                required
+              />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="email" className="text-right">
@@ -118,8 +142,20 @@ export function ClientModal({ isOpen, onClose, onSave, client }: ClientModalProp
               <Input
                 id="email"
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="cpf" className="text-right">
+                CPF
+              </Label>
+              <Input
+                id="cpf"
+                value={formData.cpf}
+                onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
                 className="col-span-3"
                 required
               />
@@ -130,8 +166,8 @@ export function ClientModal({ isOpen, onClose, onSave, client }: ClientModalProp
               </Label>
               <Input
                 id="phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 className="col-span-3"
                 required
               />
@@ -142,14 +178,40 @@ export function ClientModal({ isOpen, onClose, onSave, client }: ClientModalProp
               </Label>
               <Input
                 id="address"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 className="col-span-3"
                 required
               />
             </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="postalCode" className="text-right">
+                CEP
+              </Label>
+              <Input
+                id="postalCode"
+                value={formData.postalCode}
+                onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="cylinderType" className="text-right">
+                Tipo Cilindro
+              </Label>
+              <Input
+                id="cylinderType"
+                value={formData.cylinderType}
+                onChange={(e) => setFormData({ ...formData, cylinderType: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
           </div>
           <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
             <Button type="submit" disabled={loading}>
               {loading ? "Salvando..." : "Salvar"}
             </Button>

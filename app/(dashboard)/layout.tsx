@@ -36,6 +36,8 @@ export default function DashboardLayout({
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         router.push("/login")
+      } else if (event === "SIGNED_IN" && session) {
+        setLoading(false)
       }
     })
 

@@ -1,67 +1,54 @@
 "use client"
 
-import type React from "react"
-
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import * as React from "react"
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
+import { AppSidebar } from "@/components/app-sidebar"
 import { Header } from "@/components/header"
-import { Sidebar } from "@/components/sidebar"
-import { supabase } from "@/lib/supabase-browser"
+import { Toaster } from "@/components/ui/toaster"
+import { usePathname } from "next/navigation"
+import { createBrowserClient } from "@supabase/ssr"
+import { useRouter } from "next/navigation"
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const [loading, setLoading] = useState(true)
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
   const router = useRouter()
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+  // Initialize Supabase client for client-side operations
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  )
 
-      if (!session) {
-        router.push("/login")
-        return
-      }
-
-      setLoading(false)
-    }
-
-    checkAuth()
-
+  React.useEffect(() => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT" || !session) {
+      if (event === "SIGNED_OUT") {
         router.push("/login")
       }
     })
 
-    return () => subscription.unsubscribe()
-  }, [router])
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [supabase.auth, router])
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-lg">Carregando...</div>
-      </div>
-    )
-  }
+  // Determine if the sidebar should be open by default.
+  // This logic is typically handled by a cookie in the SidebarProvider,
+  // but for a client component, we can use a simple state or rely on the provider's default.
+  // The `cookies()` import was the issue, so we remove it here.
+  // The SidebarProvider handles its own cookie state internally.
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden lg:pl-64">
-        {" "}
-        {/* Apply pl-64 here */}
-        <Header />
-        <main className="flex-1 overflow-auto p-6">
-          <div className="mx-auto max-w-7xl">{children}</div>
-        </main>
+    <SidebarProvider>
+      <div className="flex h-screen bg-gray-100">
+        <AppSidebar />
+        <SidebarInset className="flex flex-1 flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 overflow-y-auto p-4">{children}</main>
+        </SidebarInset>
       </div>
-    </div>
+      <Toaster />
+    </SidebarProvider>
   )
 }

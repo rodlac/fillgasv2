@@ -1,33 +1,22 @@
-import type { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { withPermission } from "@/lib/auth"
+import { NextResponse } from "next/server"
 
-export const POST = withPermission("payments:verify")(
-  async (req: NextRequest, { params }: { params: { id: string } }, user: any) => {
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  try {
     const body = await req.json()
-    const { approved, notes } = body
+    const { status, verificationNotes } = body
 
-    try {
-      const payment = await prisma.v2_payments.update({
-        where: { id: params.id },
-        data: {
-          status: approved ? "proof_verified" : "proof_rejected",
-          verifiedBy: user.id,
-          verificationNotes: notes,
-        },
-      })
-
-      // Update booking payment status if approved
-      if (approved) {
-        await prisma.v2_bookings.update({
-          where: { id: payment.bookingId },
-          data: { paymentStatus: "confirmed" },
-        })
-      }
-
-      return Response.json({ message: "Verificação concluída" })
-    } catch (error) {
-      return Response.json({ error: "Erro ao verificar comprovante" }, { status: 500 })
+    if (!status) {
+      return NextResponse.json({ message: "Status is required" }, { status: 400 })
     }
-  },
-)
+
+    const updatedPayment = await prisma.payment.update({
+      where: { id: params.id },
+      data: { status, verificationNotes },
+    })
+    return NextResponse.json(updatedPayment)
+  } catch (error) {
+    console.error("Error verifying payment proof:", error)
+    return NextResponse.json({ message: "Failed to verify payment proof" }, { status: 500 })
+  }
+}

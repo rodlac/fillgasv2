@@ -2,17 +2,20 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { ExternalLink, Eye } from "lucide-react"
+import { Search, CheckCircle, Eye } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface Payment {
   id: string
   bookingId: string
   booking: {
-    client: { name: string }
+    client: {
+      name: string
+    }
   }
   amount: number
   discountAmount?: number
@@ -21,25 +24,33 @@ interface Payment {
   status: string
   transactionId?: string
   proofOfPaymentUrl?: string
+  verificationNotes?: string
   createdAt: string
 }
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState("") // For future filtering by client name/booking ID
   const { toast } = useToast()
 
   const fetchPayments = async () => {
+    setLoading(true)
     try {
-      const response = await fetch("/api/payments")
+      const response = await fetch(`/api/payments?search=${search}`)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
       const data = await response.json()
-      setPayments(data)
+      setPayments(data.payments || []) // Ensure it's always an array
     } catch (error) {
+      console.error("Failed to fetch payments:", error)
       toast({
         title: "Erro",
         description: "Erro ao carregar pagamentos",
         variant: "destructive",
       })
+      setPayments([]) // Set to empty array on error
     } finally {
       setLoading(false)
     }
@@ -47,15 +58,17 @@ export default function PaymentsPage() {
 
   useEffect(() => {
     fetchPayments()
-  }, [])
+  }, [search])
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case "CONFIRMED":
+      case "completed":
         return "default"
-      case "PENDING":
+      case "pending":
+      case "awaiting_transfer":
         return "secondary"
-      case "FAILED":
+      case "failed":
+      case "cancelled":
         return "destructive"
       default:
         return "outline"
@@ -78,13 +91,22 @@ export default function PaymentsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Lista de Pagamentos</CardTitle>
+          <div className="flex items-center space-x-2">
+            <Search className="h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Buscar por cliente ou agendamento..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Cliente</TableHead>
                 <TableHead>Agendamento ID</TableHead>
+                <TableHead>Cliente</TableHead>
                 <TableHead>Valor Original</TableHead>
                 <TableHead>Desconto</TableHead>
                 <TableHead>Valor Final</TableHead>
@@ -97,8 +119,8 @@ export default function PaymentsPage() {
             <TableBody>
               {payments.map((payment) => (
                 <TableRow key={payment.id}>
-                  <TableCell className="font-medium">{payment.booking.client.name}</TableCell>
-                  <TableCell>{payment.bookingId.substring(0, 8)}...</TableCell>
+                  <TableCell className="font-medium">{payment.bookingId.substring(0, 8)}...</TableCell>
+                  <TableCell>{payment.booking.client.name}</TableCell>
                   <TableCell>R$ {Number(payment.amount).toFixed(2)}</TableCell>
                   <TableCell>R$ {Number(payment.discountAmount || 0).toFixed(2)}</TableCell>
                   <TableCell>R$ {Number(payment.finalAmount).toFixed(2)}</TableCell>
@@ -108,26 +130,29 @@ export default function PaymentsPage() {
                   </TableCell>
                   <TableCell>{new Date(payment.createdAt).toLocaleDateString()}</TableCell>
                   <TableCell>
-                    <div className="flex space-x-2">
-                      {payment.transactionId && (
-                        <Button variant="outline" size="sm" asChild>
-                          <a
-                            href={`https://www.asaas.com/transactions/${payment.transactionId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        </Button>
-                      )}
-                      {payment.proofOfPaymentUrl && (
-                        <Button variant="outline" size="sm" asChild>
-                          <a href={payment.proofOfPaymentUrl} target="_blank" rel="noopener noreferrer">
-                            <Eye className="h-4 w-4" />
-                          </a>
-                        </Button>
-                      )}
-                    </div>
+                    {payment.proofOfPaymentUrl && payment.status === "awaiting_transfer" && (
+                      <Button variant="outline" size="sm" className="mr-2 bg-transparent">
+                        <CheckCircle className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {payment.transactionId && (
+                      <Button variant="outline" size="sm" asChild>
+                        <a
+                          href={`https://www.asaas.com/transactions/${payment.transactionId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Search className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
+                    {payment.proofOfPaymentUrl && (
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={payment.proofOfPaymentUrl} target="_blank" rel="noopener noreferrer">
+                          <Eye className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

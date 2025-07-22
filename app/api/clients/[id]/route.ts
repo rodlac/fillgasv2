@@ -1,53 +1,53 @@
-import type { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { withPermission } from "@/lib/auth"
+import { NextResponse } from "next/server"
 
-export const GET = withPermission("clients:read")(async (req: NextRequest, { params }: { params: { id: string } }) => {
-  const client = await prisma.v2_clients.findUnique({
-    where: { id: params.id },
-    include: {
-      bookings: {
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      },
-    },
-  })
-
-  if (!client) {
-    return Response.json({ error: "Cliente não encontrado" }, { status: 404 })
+export async function GET(req: Request, { params }: { params: { id: string } }) {
+  try {
+    const client = await prisma.client.findUnique({
+      where: { id: params.id },
+    })
+    if (!client) {
+      return NextResponse.json({ message: "Client not found" }, { status: 404 })
+    }
+    return NextResponse.json(client)
+  } catch (error) {
+    console.error("Error fetching client:", error)
+    return NextResponse.json({ message: "Failed to fetch client" }, { status: 500 })
   }
+}
 
-  return Response.json(client)
-})
-
-export const PUT = withPermission("clients:update")(
-  async (req: NextRequest, { params }: { params: { id: string } }) => {
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  try {
     const body = await req.json()
+    const { name, email, phone, cpfCnpj, address, isActive } = body
 
-    try {
-      const client = await prisma.v2_clients.update({
-        where: { id: params.id },
-        data: body,
-      })
+    const updatedClient = await prisma.client.update({
+      where: { id: params.id },
+      data: {
+        name,
+        email,
+        phone,
+        cpfCnpj,
+        address,
+        isActive,
+      },
+    })
+    return NextResponse.json(updatedClient)
+  } catch (error) {
+    console.error("Error updating client:", error)
+    return NextResponse.json({ message: "Failed to update client" }, { status: 500 })
+  }
+}
 
-      return Response.json(client)
-    } catch (error) {
-      return Response.json({ error: "Erro ao atualizar cliente" }, { status: 500 })
-    }
-  },
-)
-
-export const DELETE = withPermission("clients:delete")(
-  async (req: NextRequest, { params }: { params: { id: string } }) => {
-    try {
-      await prisma.v2_clients.update({
-        where: { id: params.id },
-        data: { isActive: false },
-      })
-
-      return new Response(null, { status: 204 })
-    } catch (error) {
-      return Response.json({ error: "Erro ao desativar cliente" }, { status: 500 })
-    }
-  },
-)
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  try {
+    await prisma.client.update({
+      where: { id: params.id },
+      data: { isActive: false }, // Soft delete
+    })
+    return new Response(null, { status: 204 })
+  } catch (error) {
+    console.error("Error deactivating client:", error)
+    return NextResponse.json({ message: "Failed to deactivate client" }, { status: 500 })
+  }
+}

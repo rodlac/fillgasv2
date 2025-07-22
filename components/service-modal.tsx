@@ -2,19 +2,12 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 
 interface Service {
@@ -27,71 +20,59 @@ interface Service {
 interface ServiceModalProps {
   open: boolean
   onClose: () => void
-  service?: Service | null
+  service: Service | null
 }
 
 export function ServiceModal({ open, onClose, service }: ServiceModalProps) {
-  const [formData, setFormData] = useState({
-    name: "",
-    price: "",
-    isActive: true,
-  })
+  const [formData, setFormData] = useState<Partial<Service>>({})
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
     if (service) {
-      setFormData({
-        name: service.name,
-        price: service.price.toString(),
-        isActive: service.isActive,
-      })
+      setFormData(service)
     } else {
-      setFormData({
-        name: "",
-        price: "",
-        isActive: true,
-      })
+      setFormData({ isActive: true, price: 0 }) // Default for new service
     }
   }, [service])
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target
+    setFormData((prev) => ({ ...prev, [id]: id === "price" ? Number.parseFloat(value) || 0 : value }))
+  }
+
+  const handleSwitchChange = (checked: boolean) => {
+    setFormData((prev) => ({ ...prev, isActive: checked }))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-
     try {
-      const url = service ? `/api/services/${service.id}` : "/api/services"
       const method = service ? "PUT" : "POST"
-
+      const url = service ? `/api/services/${service.id}` : "/api/services"
       const response = await fetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          ...formData,
-          price: Number.parseFloat(formData.price),
-        }),
+        body: JSON.stringify(formData),
       })
 
-      if (response.ok) {
-        toast({
-          title: "Sucesso",
-          description: `Serviço ${service ? "atualizado" : "criado"} com sucesso`,
-        })
-        onClose()
-      } else {
-        const error = await response.json()
-        toast({
-          title: "Erro",
-          description: error.error || "Erro ao salvar serviço",
-          variant: "destructive",
-        })
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Erro ao salvar serviço")
       }
-    } catch (error) {
+
+      toast({
+        title: "Sucesso",
+        description: `Serviço ${service ? "atualizado" : "criado"} com sucesso!`,
+      })
+      onClose()
+    } catch (error: any) {
       toast({
         title: "Erro",
-        description: "Erro ao salvar serviço",
+        description: error.message || "Ocorreu um erro inesperado.",
         variant: "destructive",
       })
     } finally {
@@ -104,51 +85,40 @@ export function ServiceModal({ open, onClose, service }: ServiceModalProps) {
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{service ? "Editar Serviço" : "Novo Serviço"}</DialogTitle>
-          <DialogDescription>
-            {service ? "Atualize as informações do serviço" : "Preencha os dados do novo serviço"}
-          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Nome
-              </Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="col-span-3"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="price" className="text-right">
-                Preço
-              </Label>
-              <Input
-                id="price"
-                type="number"
-                step="0.01"
-                value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                className="col-span-3"
-                required
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="isActive"
-                checked={formData.isActive}
-                onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-              />
-              <Label htmlFor="isActive">Ativo</Label>
-            </div>
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="name" className="text-right">
+              Nome
+            </Label>
+            <Input id="name" value={formData.name || ""} onChange={handleChange} className="col-span-3" required />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="price" className="text-right">
+              Preço
+            </Label>
+            <Input
+              id="price"
+              type="number"
+              step="0.01"
+              value={formData.price !== undefined ? formData.price : ""}
+              onChange={handleChange}
+              className="col-span-3"
+              required
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="isActive" className="text-right">
+              Ativo
+            </Label>
+            <Switch
+              id="isActive"
+              checked={formData.isActive}
+              onCheckedChange={handleSwitchChange}
+              className="col-span-3"
+            />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
             <Button type="submit" disabled={loading}>
               {loading ? "Salvando..." : "Salvar"}
             </Button>

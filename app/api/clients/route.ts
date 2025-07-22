@@ -5,18 +5,29 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const search = searchParams.get("search") || ""
+    const limit = Number.parseInt(searchParams.get("limit") || "10")
+    const offset = Number.parseInt(searchParams.get("offset") || "0")
 
-    const clients = await prisma.client.findMany({
-      where: {
-        OR: [
-          { name: { contains: search, mode: "insensitive" } },
-          { cpfCnpj: { contains: search, mode: "insensitive" } },
-          { phone: { contains: search, mode: "insensitive" } },
-        ],
-      },
-      orderBy: { name: "asc" },
-    })
-    return NextResponse.json({ clients })
+    const where = search
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { cpfCnpj: { contains: search, mode: "insensitive" } },
+            { phone: { contains: search, mode: "insensitive" } },
+          ],
+        }
+      : {}
+
+    const [clients, total] = await Promise.all([
+      prisma.client.findMany({
+        where,
+        take: limit,
+        skip: offset,
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.client.count({ where }),
+    ])
+    return NextResponse.json({ clients, total })
   } catch (error) {
     console.error("Error fetching clients:", error)
     return NextResponse.json({ message: "Failed to fetch clients" }, { status: 500 })

@@ -6,11 +6,10 @@ export async function GET() {
     const coupons = await prisma.coupon.findMany({
       orderBy: { createdAt: "desc" },
     })
-    // Convert Decimal to number for frontend consumption
     const formattedCoupons = coupons.map((coupon) => ({
       ...coupon,
       discountValue: coupon.discountValue.toNumber(),
-      minimumAmount: coupon.minimumAmount?.toNumber() || null, // Handle optional minimumAmount
+      minimumAmount: coupon.minimumAmount?.toNumber() || null,
     }))
     return NextResponse.json(formattedCoupons)
   } catch (error) {
@@ -38,10 +37,14 @@ export async function POST(req: Request) {
         validFrom: new Date(validFrom),
         validUntil: new Date(validUntil),
         isActive: isActive ?? true,
-        currentUsage: 0,
       },
     })
-    return NextResponse.json(newCoupon, { status: 201 })
+    const formattedCoupon = {
+      ...newCoupon,
+      discountValue: newCoupon.discountValue.toNumber(),
+      minimumAmount: newCoupon.minimumAmount?.toNumber() || null,
+    }
+    return NextResponse.json(formattedCoupon, { status: 201 })
   } catch (error) {
     console.error("Error creating coupon:", error)
     return NextResponse.json({ message: "Failed to create coupon" }, { status: 500 })

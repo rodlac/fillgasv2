@@ -2,90 +2,108 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useEffect, useState } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
+
+interface Coupon {
+  id: string
+  code: string
+  discountType: string
+  discountValue: number
+  minimumAmount?: number
+  maxUsage?: number
+  currentUsage: number
+  validFrom: string
+  validUntil: string
+  isActive: boolean
+}
 
 interface CouponModalProps {
   open: boolean
   onClose: () => void
-  coupon?: any
+  coupon: Coupon | null
 }
 
 export function CouponModal({ open, onClose, coupon }: CouponModalProps) {
+  const [formData, setFormData] = useState<Partial<Coupon>>({})
   const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    code: "",
-    discountType: "percentage",
-    discountValue: 0,
-    minimumAmount: 0,
-    maxUsage: 0,
-    validFrom: "",
-    validUntil: "",
-    isActive: true,
-  })
   const { toast } = useToast()
 
   useEffect(() => {
-    if (open) {
-      if (coupon) {
-        setFormData({
-          code: coupon.code || "",
-          discountType: coupon.discountType || "percentage",
-          discountValue: coupon.discountValue || 0,
-          minimumAmount: coupon.minimumAmount || 0,
-          maxUsage: coupon.maxUsage || 0,
-          validFrom: coupon.validFrom ? new Date(coupon.validFrom).toISOString().split("T")[0] : "",
-          validUntil: coupon.validUntil ? new Date(coupon.validUntil).toISOString().split("T")[0] : "",
-          isActive: coupon.isActive ?? true,
-        })
-      } else {
-        setFormData({
-          code: "",
-          discountType: "percentage",
-          discountValue: 0,
-          minimumAmount: 0,
-          maxUsage: 0,
-          validFrom: "",
-          validUntil: "",
-          isActive: true,
-        })
-      }
+    if (coupon) {
+      setFormData({
+        ...coupon,
+        validFrom: coupon.validFrom.split("T")[0], // Format date for input type="date"
+        validUntil: coupon.validUntil.split("T")[0], // Format date for input type="date"
+      })
+    } else {
+      setFormData({
+        discountType: "percentage",
+        discountValue: 0,
+        minimumAmount: 0,
+        maxUsage: 0,
+        isActive: true,
+        validFrom: new Date().toISOString().split("T")[0],
+        validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // 7 days from now
+      })
     }
-  }, [open, coupon])
+  }, [coupon])
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [id]:
+        id === "discountValue" || id === "minimumAmount"
+          ? Number.parseFloat(value) || 0
+          : id === "maxUsage"
+            ? Number.parseInt(value) || 0
+            : value,
+    }))
+  }
+
+  const handleSelectChange = (value: string) => {
+    setFormData((prev) => ({ ...prev, discountType: value }))
+  }
+
+  const handleSwitchChange = (checked: boolean) => {
+    setFormData((prev) => ({ ...prev, isActive: checked }))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-
     try {
-      const url = coupon ? `/api/coupons/${coupon.id}` : "/api/coupons"
       const method = coupon ? "PUT" : "POST"
-
+      const url = coupon ? `/api/coupons/${coupon.id}` : "/api/coupons"
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(formData),
       })
 
-      if (response.ok) {
-        toast({
-          title: "Sucesso",
-          description: `Cupom ${coupon ? "atualizado" : "criado"} com sucesso`,
-        })
-        onClose()
-      } else {
-        throw new Error("Erro ao salvar cupom")
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Erro ao salvar cupom")
       }
-    } catch (error) {
+
+      toast({
+        title: "Sucesso",
+        description: `Cupom ${coupon ? "atualizado" : "criado"} com sucesso!`,
+      })
+      onClose()
+    } catch (error: any) {
       toast({
         title: "Erro",
-        description: "Erro ao salvar cupom",
+        description: error.message || "Ocorreu um erro inesperado.",
         variant: "destructive",
       })
     } finally {
@@ -95,112 +113,112 @@ export function CouponModal({ open, onClose, coupon }: CouponModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{coupon ? "Editar Cupom" : "Novo Cupom"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="code">Código do Cupom</Label>
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="code" className="text-right">
+              Código
+            </Label>
+            <Input id="code" value={formData.code || ""} onChange={handleChange} className="col-span-3" required />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="discountType" className="text-right">
+              Tipo Desconto
+            </Label>
+            <Select value={formData.discountType} onValueChange={handleSelectChange}>
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Selecione o tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="percentage">Percentual</SelectItem>
+                <SelectItem value="fixed">Fixo</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="discountValue" className="text-right">
+              Valor Desconto
+            </Label>
             <Input
-              id="code"
-              value={formData.code}
-              onChange={(e) => setFormData((prev) => ({ ...prev, code: e.target.value }))}
+              id="discountValue"
+              type="number"
+              step="0.01"
+              value={formData.discountValue !== undefined ? formData.discountValue : ""}
+              onChange={handleChange}
+              className="col-span-3"
               required
             />
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="discountType">Tipo de Desconto</Label>
-              <Select
-                value={formData.discountType}
-                onValueChange={(value) => setFormData((prev) => ({ ...prev, discountType: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="percentage">Percentual</SelectItem>
-                  <SelectItem value="fixed">Valor Fixo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="discountValue">Valor do Desconto</Label>
-              <Input
-                id="discountValue"
-                type="number"
-                step="0.01"
-                value={formData.discountValue}
-                onChange={(e) => setFormData((prev) => ({ ...prev, discountValue: Number.parseFloat(e.target.value) }))}
-                required
-              />
-            </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="minimumAmount" className="text-right">
+              Valor Mínimo
+            </Label>
+            <Input
+              id="minimumAmount"
+              type="number"
+              step="0.01"
+              value={formData.minimumAmount !== undefined ? formData.minimumAmount : ""}
+              onChange={handleChange}
+              className="col-span-3"
+            />
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="minimumAmount">Valor Mínimo (opcional)</Label>
-              <Input
-                id="minimumAmount"
-                type="number"
-                step="0.01"
-                value={formData.minimumAmount}
-                onChange={(e) => setFormData((prev) => ({ ...prev, minimumAmount: Number.parseFloat(e.target.value) }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="maxUsage">Uso Máximo (0 para ilimitado)</Label>
-              <Input
-                id="maxUsage"
-                type="number"
-                value={formData.maxUsage}
-                onChange={(e) => setFormData((prev) => ({ ...prev, maxUsage: Number.parseInt(e.target.value) }))}
-              />
-            </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="maxUsage" className="text-right">
+              Uso Máximo
+            </Label>
+            <Input
+              id="maxUsage"
+              type="number"
+              value={formData.maxUsage !== undefined ? formData.maxUsage : ""}
+              onChange={handleChange}
+              className="col-span-3"
+            />
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="validFrom">Válido de</Label>
-              <Input
-                id="validFrom"
-                type="date"
-                value={formData.validFrom}
-                onChange={(e) => setFormData((prev) => ({ ...prev, validFrom: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="validUntil">Válido até</Label>
-              <Input
-                id="validUntil"
-                type="date"
-                value={formData.validUntil}
-                onChange={(e) => setFormData((prev) => ({ ...prev, validUntil: e.target.value }))}
-                required
-              />
-            </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="validFrom" className="text-right">
+              Válido De
+            </Label>
+            <Input
+              id="validFrom"
+              type="date"
+              value={formData.validFrom || ""}
+              onChange={handleChange}
+              className="col-span-3"
+              required
+            />
           </div>
-
-          <div className="flex items-center space-x-2">
-            <Checkbox
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="validUntil" className="text-right">
+              Válido Até
+            </Label>
+            <Input
+              id="validUntil"
+              type="date"
+              value={formData.validUntil || ""}
+              onChange={handleChange}
+              className="col-span-3"
+              required
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="isActive" className="text-right">
+              Ativo
+            </Label>
+            <Switch
               id="isActive"
               checked={formData.isActive}
-              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, isActive: Boolean(checked) }))}
+              onCheckedChange={handleSwitchChange}
+              className="col-span-3"
             />
-            <Label htmlFor="isActive">Ativo</Label>
           </div>
-
-          <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
+          <DialogFooter>
             <Button type="submit" disabled={loading}>
               {loading ? "Salvando..." : "Salvar"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

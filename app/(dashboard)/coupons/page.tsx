@@ -31,16 +31,22 @@ export default function CouponsPage() {
   const { toast } = useToast()
 
   const fetchCoupons = async () => {
+    setLoading(true)
     try {
       const response = await fetch("/api/coupons")
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
       const data = await response.json()
-      setCoupons(data)
+      setCoupons(data || []) // Ensure it's always an array
     } catch (error) {
+      console.error("Failed to fetch coupons:", error)
       toast({
         title: "Erro",
         description: "Erro ao carregar cupons",
         variant: "destructive",
       })
+      setCoupons([]) // Set to empty array on error
     } finally {
       setLoading(false)
     }
@@ -58,13 +64,17 @@ export default function CouponsPage() {
   const handleDelete = async (id: string) => {
     if (confirm("Tem certeza que deseja excluir este cupom?")) {
       try {
-        await fetch(`/api/coupons/${id}`, { method: "DELETE" })
+        const response = await fetch(`/api/coupons/${id}`, { method: "DELETE" })
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
         toast({
           title: "Sucesso",
           description: "Cupom excluído com sucesso",
         })
         fetchCoupons()
       } catch (error) {
+        console.error("Failed to delete coupon:", error)
         toast({
           title: "Erro",
           description: "Erro ao excluir cupom",
@@ -120,12 +130,10 @@ export default function CouponsPage() {
                   <TableCell className="font-medium">{coupon.code}</TableCell>
                   <TableCell>
                     {coupon.discountType === "percentage"
-                      ? `${Number(coupon.discountValue).toFixed(0)}%` // Ensure discountValue is number
-                      : `R$ ${Number(coupon.discountValue).toFixed(2)}`}{" "}
-                    {/* Ensure discountValue is number */}
+                      ? `${Number(coupon.discountValue).toFixed(0)}%`
+                      : `R$ ${Number(coupon.discountValue).toFixed(2)}`}
                   </TableCell>
-                  <TableCell>{coupon.minimumAmount ? `R$ ${Number(coupon.minimumAmount).toFixed(2)}` : "-"}</TableCell>{" "}
-                  {/* Ensure minimumAmount is number */}
+                  <TableCell>{coupon.minimumAmount ? `R$ ${Number(coupon.minimumAmount).toFixed(2)}` : "-"}</TableCell>
                   <TableCell>
                     {coupon.currentUsage}/{coupon.maxUsage || "∞"}
                   </TableCell>

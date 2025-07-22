@@ -14,10 +14,10 @@ interface Client {
   id: string
   name: string
   email: string
-  cpf: string
+  cpfCnpj?: string // Changed from cpf to cpfCnpj based on schema
   phone: string
-  address: string
-  postalCode: string
+  address?: string
+  postalCode?: string
   cylinderType?: string
   isActive: boolean
   createdAt: string
@@ -32,16 +32,22 @@ export default function ClientsPage() {
   const { toast } = useToast()
 
   const fetchClients = async () => {
+    setLoading(true)
     try {
       const response = await fetch(`/api/clients?search=${search}`)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
       const data = await response.json()
-      setClients(data.clients)
+      setClients(data.clients || []) // Ensure it's always an array
     } catch (error) {
+      console.error("Failed to fetch clients:", error)
       toast({
         title: "Erro",
         description: "Erro ao carregar clientes",
         variant: "destructive",
       })
+      setClients([]) // Set to empty array on error
     } finally {
       setLoading(false)
     }
@@ -59,13 +65,17 @@ export default function ClientsPage() {
   const handleDelete = async (id: string) => {
     if (confirm("Tem certeza que deseja desativar este cliente?")) {
       try {
-        await fetch(`/api/clients/${id}`, { method: "DELETE" })
+        const response = await fetch(`/api/clients/${id}`, { method: "DELETE" })
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
         toast({
           title: "Sucesso",
           description: "Cliente desativado com sucesso",
         })
         fetchClients()
       } catch (error) {
+        console.error("Failed to deactivate client:", error)
         toast({
           title: "Erro",
           description: "Erro ao desativar cliente",
@@ -117,7 +127,7 @@ export default function ClientsPage() {
               <TableRow>
                 <TableHead>Nome</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>CPF</TableHead>
+                <TableHead>CPF/CNPJ</TableHead>
                 <TableHead>Telefone</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Ações</TableHead>
@@ -128,7 +138,7 @@ export default function ClientsPage() {
                 <TableRow key={client.id}>
                   <TableCell className="font-medium">{client.name}</TableCell>
                   <TableCell>{client.email}</TableCell>
-                  <TableCell>{client.cpf}</TableCell>
+                  <TableCell>{client.cpfCnpj || "-"}</TableCell>
                   <TableCell>{client.phone}</TableCell>
                   <TableCell>
                     <Badge variant={client.isActive ? "default" : "secondary"}>

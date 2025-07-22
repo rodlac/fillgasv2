@@ -1,21 +1,22 @@
-import type { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { withPermission } from "@/lib/auth"
+import { NextResponse } from "next/server"
 
-export const PATCH = withPermission("bookings:update")(
-  async (req: NextRequest, { params }: { params: { id: string } }) => {
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  try {
     const body = await req.json()
     const { status } = body
 
-    try {
-      const booking = await prisma.v2_bookings.update({
-        where: { id: params.id },
-        data: { status },
-      })
-
-      return Response.json(booking)
-    } catch (error) {
-      return Response.json({ error: "Erro ao atualizar status" }, { status: 500 })
+    if (!status) {
+      return NextResponse.json({ message: "Status is required" }, { status: 400 })
     }
-  },
-)
+
+    const updatedBooking = await prisma.booking.update({
+      where: { id: params.id },
+      data: { status },
+    })
+    return NextResponse.json(updatedBooking)
+  } catch (error) {
+    console.error("Error updating booking status:", error)
+    return NextResponse.json({ message: "Failed to update booking status" }, { status: 500 })
+  }
+}

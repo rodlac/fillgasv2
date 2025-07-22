@@ -1,33 +1,39 @@
-import type { NextRequest } from "next/server"
-import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createClientServer } from "@/lib/supabase-server"
+import { NextResponse } from "next/server"
 
-export function withPermission(permission: string) {
-  return (handler: (req: NextRequest, context?: any) => Promise<Response>) =>
-    async (req: NextRequest, context?: any) => {
-      try {
-        const supabase = createSupabaseServerClient()
+// Define a type for the handler function
+type Handler = (req: Request, ...args: any[]) => Promise<NextResponse | Response>
 
-        const user = await getUser()
+// This is a placeholder for actual permission checking logic
+// In a real application, you would check user roles/permissions from the session
+const checkPermission = async (session: any, requiredPermission: string) => {
+  if (!session) {
+    return false // No session, no permission
+  }
+  // Example: Check if user has an 'admin' role or specific permission
+  // This would involve fetching user roles/permissions from your database
+  // For now, let's assume all authenticated users have all permissions for simplicity
+  return true
+}
 
-        if (!user) {
-          return Response.json({ error: "Unauthorized" }, { status: 401 })
-        }
+export const withPermission =
+  (requiredPermission: string) =>
+  (handler: Handler) =>
+  async (req: Request, ...args: any[]) => {
+    const supabase = createClientServer()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
-        // For now, we'll allow all authenticated users
-        // In the future, you can implement role-based permissions here
-
-        return handler(req, context)
-      } catch (error) {
-        console.error("Auth error:", error)
-        return Response.json({ error: "Internal server error" }, { status: 500 })
-      }
+    if (!session) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
     }
-}
 
-export async function getUser() {
-  const supabase = createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  return user
-}
+    const hasPermission = await checkPermission(session, requiredPermission)
+
+    if (!hasPermission) {
+      return NextResponse.json({ message: "Forbidden: Insufficient permissions" }, { status: 403 })
+    }
+
+    return handler(req, ...args)
+  }

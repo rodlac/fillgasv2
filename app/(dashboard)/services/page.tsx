@@ -4,8 +4,9 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Edit } from "lucide-react"
+import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { ServiceModal } from "@/components/service-modal"
 import { useToast } from "@/hooks/use-toast"
 
@@ -26,16 +27,22 @@ export default function ServicesPage() {
   const { toast } = useToast()
 
   const fetchServices = async () => {
+    setLoading(true)
     try {
-      const response = await fetch("/api/services")
+      const response = await fetch(`/api/services?search=${search}`)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
       const data = await response.json()
-      setServices(data.filter((service: Service) => service.name.toLowerCase().includes(search.toLowerCase())))
+      setServices(data || []) // Ensure it's always an array
     } catch (error) {
+      console.error("Failed to fetch services:", error)
       toast({
         title: "Erro",
         description: "Erro ao carregar serviços",
         variant: "destructive",
       })
+      setServices([]) // Set to empty array on error
     } finally {
       setLoading(false)
     }
@@ -48,6 +55,29 @@ export default function ServicesPage() {
   const handleEdit = (service: Service) => {
     setSelectedService(service)
     setShowModal(true)
+  }
+
+  const handleDelete = async (id: string) => {
+    if (confirm("Tem certeza que deseja excluir este serviço?")) {
+      try {
+        const response = await fetch(`/api/services/${id}`, { method: "DELETE" })
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        toast({
+          title: "Sucesso",
+          description: "Serviço excluído com sucesso",
+        })
+        fetchServices()
+      } catch (error) {
+        console.error("Failed to delete service:", error)
+        toast({
+          title: "Erro",
+          description: "Erro ao excluir serviço",
+          variant: "destructive",
+        })
+      }
+    }
   }
 
   const handleModalClose = () => {
@@ -73,37 +103,55 @@ export default function ServicesPage() {
         </Button>
       </div>
 
-      <div className="flex items-center space-x-2">
-        <Search className="h-4 w-4 text-gray-400" />
-        <Input
-          placeholder="Buscar serviços..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {services.map((service) => (
-          <Card key={service.id}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{service.name}</CardTitle>
-              <Badge variant={service.isActive ? "default" : "secondary"}>
-                {service.isActive ? "Ativo" : "Inativo"}
-              </Badge>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">R$ {Number(service.price).toFixed(2)}</div>{" "}
-              {/* Ensure price is number */}
-              <div className="flex justify-end mt-4">
-                <Button variant="outline" size="sm" onClick={() => handleEdit(service)}>
-                  <Edit className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Lista de Serviços</CardTitle>
+          <div className="flex items-center space-x-2">
+            <Search className="h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Buscar por nome..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>Preço</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {services.map((service) => (
+                <TableRow key={service.id}>
+                  <TableCell className="font-medium">{service.name}</TableCell>
+                  <TableCell>R$ {Number(service.price).toFixed(2)}</TableCell>
+                  <TableCell>
+                    <Badge variant={service.isActive ? "default" : "secondary"}>
+                      {service.isActive ? "Ativo" : "Inativo"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(service)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleDelete(service.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       <ServiceModal open={showModal} onClose={handleModalClose} service={selectedService} />
     </div>

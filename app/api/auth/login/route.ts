@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server"
-import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createClientServer } from "@/lib/supabase-server"
 
-export async function POST(req: Request) {
-  const { email, password } = await req.json()
-  const supabase = createSupabaseServerClient()
+export async function POST(request: Request) {
+  const { email, password } = await request.json()
+  const supabase = createClientServer()
 
-  const { data, error } = await supabase.auth.signInWithPassword({
+  const { error } = await supabase.auth.signInWithPassword({
     email,
     password,
   })
 
   if (error) {
-    console.error("Login error:", error.message)
-    return NextResponse.json({ message: error.message }, { status: 401 })
+    return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
-  return NextResponse.json({ message: "Login successful", user: data.user })
+  return NextResponse.json({ message: "Login successful" })
 }

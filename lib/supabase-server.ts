@@ -1,10 +1,13 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
-export function createClientServer() {
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+export function createServerSupabaseClient() {
   const cookieStore = cookies()
 
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       get(name: string) {
         return cookieStore.get(name)?.value
@@ -13,7 +16,7 @@ export function createClientServer() {
         try {
           cookieStore.set({ name, value, ...options })
         } catch (error) {
-          // The `set` method was called from a Server Component.
+          // The `cookies().set()` method was called from a Server Component.
           // This can be ignored if you have middleware refreshing
           // user sessions.
         }
@@ -22,7 +25,7 @@ export function createClientServer() {
         try {
           cookieStore.set({ name, value: "", ...options })
         } catch (error) {
-          // The `remove` method was called from a Server Component.
+          // The `cookies().delete()` method was called from a Server Component.
           // This can be ignored if you have middleware refreshing
           // user sessions.
         }

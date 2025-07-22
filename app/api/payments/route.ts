@@ -1,73 +1,50 @@
-import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url)
-    const status = searchParams.get("status")
-    const limit = Number.parseInt(searchParams.get("limit") || "10")
-    const offset = Number.parseInt(searchParams.get("offset") || "0")
-
-    const where = status ? { status } : {}
-
-    const [payments, total] = await Promise.all([
-      prisma.payment.findMany({
-        where,
-        include: {
-          booking: {
-            include: {
-              client: true,
-            },
+    const payments = await prisma.payment.findMany({
+      include: {
+        booking: {
+          include: {
+            client: true,
           },
         },
-        orderBy: { createdAt: "desc" },
-        take: limit,
-        skip: offset,
-      }),
-      prisma.payment.count({ where }),
-    ])
+      },
+    })
 
     const formattedPayments = payments.map((payment) => ({
       ...payment,
       amount: payment.amount.toNumber(),
-      discountAmount: payment.discountAmount?.toNumber() || null,
-      finalAmount: payment.finalAmount.toNumber(),
+      booking: payment.booking
+        ? {
+            ...payment.booking,
+            totalAmount: payment.booking.totalAmount.toNumber(),
+            discountAmount: payment.booking.discountAmount?.toNumber(),
+            finalAmount: payment.booking.finalAmount.toNumber(),
+          }
+        : null,
     }))
 
-    return NextResponse.json({ payments: formattedPayments, total })
+    return NextResponse.json(formattedPayments)
   } catch (error) {
     console.error("Error fetching payments:", error)
     return NextResponse.json({ message: "Failed to fetch payments" }, { status: 500 })
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const body = await req.json()
-    const { bookingId, amount, discountAmount, finalAmount, paymentMethod, status, transactionId, proofOfPaymentUrl } =
-      body
-
-    if (!bookingId || amount === undefined || finalAmount === undefined || !paymentMethod || !status) {
-      return NextResponse.json({ message: "Missing required fields" }, { status: 400 })
-    }
-
+    const data = await request.json()
     const newPayment = await prisma.payment.create({
       data: {
-        bookingId,
-        amount: Number.parseFloat(amount),
-        discountAmount: discountAmount ? Number.parseFloat(discountAmount) : null,
-        finalAmount: Number.parseFloat(finalAmount),
-        paymentMethod,
-        status,
-        transactionId,
-        proofOfPaymentUrl,
+        ...data,
+        amount: Number.parseFloat(data.amount),
       },
     })
     const formattedPayment = {
       ...newPayment,
       amount: newPayment.amount.toNumber(),
-      discountAmount: newPayment.discountAmount?.toNumber() || null,
-      finalAmount: newPayment.finalAmount.toNumber(),
     }
     return NextResponse.json(formattedPayment, { status: 201 })
   } catch (error) {

@@ -1,16 +1,15 @@
 import { PrismaClient } from "@prisma/client"
 
-// add prisma to the NodeJS global type
+const prismaClientSingleton = () => {
+  return new PrismaClient()
+}
+
 declare global {
-  var prismaGlobal: PrismaClient | undefined
+  var prismaGlobal: undefined | ReturnType<typeof prismaClientSingleton>
 }
 
-const globalForPrisma = globalThis as unknown as {
-  prismaGlobal: PrismaClient | undefined
-}
-
-const prisma = globalForPrisma.prismaGlobal ?? new PrismaClient()
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prismaGlobal = prisma
+const prisma = globalThis.prismaGlobal ?? prismaClientSingleton()
 
 export default prisma
+
+if (process.env.NODE_ENV !== "production") globalThis.prismaGlobal = prisma

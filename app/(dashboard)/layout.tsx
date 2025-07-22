@@ -1,54 +1,66 @@
 "use client"
 
-import * as React from "react"
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
-import { Header } from "@/components/header"
-import { Toaster } from "@/components/ui/toaster"
-import { usePathname } from "next/navigation"
-import { createBrowserClient } from "@supabase/ssr"
+import type React from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { Header } from "@/components/header"
+import { Sidebar } from "@/components/sidebar"
+import { supabase } from "@/lib/supabase-browser"
+import { Toaster } from "@/components/ui/toaster" // Import Toaster
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
 
-  // Initialize Supabase client for client-side operations
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
+  useEffect(() => {
+    const checkAuth = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
 
-  React.useEffect(() => {
+      if (!session) {
+        router.push("/login")
+        return
+      }
+
+      setLoading(false)
+    }
+
+    checkAuth()
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") {
+      if (event === "SIGNED_OUT" || !session) {
         router.push("/login")
       }
     })
 
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [supabase.auth, router])
+    return () => subscription.unsubscribe()
+  }, [router])
 
-  // Determine if the sidebar should be open by default.
-  // This logic is typically handled by a cookie in the SidebarProvider,
-  // but for a client component, we can use a simple state or rely on the provider's default.
-  // The `cookies()` import was the issue, so we remove it here.
-  // The SidebarProvider handles its own cookie state internally.
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-lg">Carregando...</div>
+      </div>
+    )
+  }
 
   return (
-    <SidebarProvider>
-      <div className="flex h-screen bg-gray-100">
-        <AppSidebar />
-        <SidebarInset className="flex flex-1 flex-col overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-y-auto p-4">{children}</main>
-        </SidebarInset>
+    <div className="flex h-screen bg-gray-100">
+      <Sidebar />
+      <div className="flex flex-1 flex-col overflow-hidden lg:pl-64">
+        <Header />
+        <main className="flex-1 overflow-y-auto p-4">
+          <div className="mx-auto max-w-7xl">{children}</div>
+        </main>
       </div>
-      <Toaster />
-    </SidebarProvider>
+      <Toaster /> {/* Add Toaster here */}
+    </div>
   )
 }

@@ -1,109 +1,80 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Edit, Trash2 } from "lucide-react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { PlusCircle, Search } from "lucide-react"
 import { CouponModal } from "@/components/coupon-modal"
-import { useToast } from "@/hooks/use-toast"
 
 interface Coupon {
   id: string
   code: string
-  discountType: string
+  discountType: "PERCENTAGE" | "FIXED"
   discountValue: number
-  minimumAmount?: number
-  maxUsage?: number
-  currentUsage: number
-  validFrom: string
-  validUntil: string
+  minimumAmount?: number | null
+  usageLimit?: number | null
+  usedCount: number
+  expirationDate?: string | null
   isActive: boolean
-  createdAt: string
 }
 
 export default function CouponsPage() {
   const [coupons, setCoupons] = useState<Coupon[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null)
-  const { toast } = useToast()
-
-  const fetchCoupons = async () => {
-    setLoading(true)
-    try {
-      const response = await fetch("/api/coupons")
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
-      setCoupons(data || []) // Ensure it's always an array
-    } catch (error) {
-      console.error("Failed to fetch coupons:", error)
-      toast({
-        title: "Erro",
-        description: "Erro ao carregar cupons",
-        variant: "destructive",
-      })
-      setCoupons([]) // Set to empty array on error
-    } finally {
-      setLoading(false)
-    }
-  }
 
   useEffect(() => {
     fetchCoupons()
   }, [])
 
-  const handleEdit = (coupon: Coupon) => {
-    setSelectedCoupon(coupon)
-    setShowModal(true)
-  }
-
-  const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este cupom?")) {
-      try {
-        const response = await fetch(`/api/coupons/${id}`, { method: "DELETE" })
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        toast({
-          title: "Sucesso",
-          description: "Cupom excluído com sucesso",
-        })
-        fetchCoupons()
-      } catch (error) {
-        console.error("Failed to delete coupon:", error)
-        toast({
-          title: "Erro",
-          description: "Erro ao excluir cupom",
-          variant: "destructive",
-        })
+  const fetchCoupons = async () => {
+    try {
+      const res = await fetch("/api/coupons")
+      if (!res.ok) {
+        throw new Error("Failed to fetch coupons")
       }
+      const data = await res.json()
+      setCoupons(data || []) // Ensure it's an array
+    } catch (error) {
+      console.error("Error fetching coupons:", error)
+      setCoupons([]) // Set to empty array on error
     }
   }
 
-  const handleModalClose = () => {
-    setShowModal(false)
-    setSelectedCoupon(null)
-    fetchCoupons()
+  const filteredCoupons = coupons.filter((coupon) => coupon.code.toLowerCase().includes(searchTerm.toLowerCase()))
+
+  const handleEdit = (coupon: Coupon) => {
+    setSelectedCoupon(coupon)
+    setIsModalOpen(true)
   }
 
-  if (loading) {
-    return <div>Carregando...</div>
+  const handleNewCoupon = () => {
+    setSelectedCoupon(null)
+    setIsModalOpen(true)
+  }
+
+  const handleSave = async () => {
+    await fetchCoupons()
+    setIsModalOpen(false)
+  }
+
+  const formatDiscount = (coupon: Coupon) => {
+    if (coupon.discountType === "PERCENTAGE") {
+      return `${Number(coupon.discountValue).toFixed(0)}%`
+    }
+    return `R$ ${Number(coupon.discountValue).toFixed(2)}`
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Cupons</h1>
-          <p className="text-gray-600">Gerencie cupons de desconto</p>
-        </div>
-        <Button onClick={() => setShowModal(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Cupom
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Cupons</h1>
+        <Button onClick={handleNewCoupon}>
+          <PlusCircle className="mr-2 h-5 w-5" /> Novo Cupom
         </Button>
       </div>
 
@@ -112,60 +83,68 @@ export default function CouponsPage() {
           <CardTitle>Lista de Cupons</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Desconto</TableHead>
-                <TableHead>Valor Mínimo</TableHead>
-                <TableHead>Uso</TableHead>
-                <TableHead>Validade</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {coupons.map((coupon) => (
-                <TableRow key={coupon.id}>
-                  <TableCell className="font-medium">{coupon.code}</TableCell>
-                  <TableCell>
-                    {coupon.discountType === "percentage"
-                      ? `${Number(coupon.discountValue).toFixed(0)}%`
-                      : `R$ ${Number(coupon.discountValue).toFixed(2)}`}
-                  </TableCell>
-                  <TableCell>{coupon.minimumAmount ? `R$ ${Number(coupon.minimumAmount).toFixed(2)}` : "-"}</TableCell>
-                  <TableCell>
-                    {coupon.currentUsage}/{coupon.maxUsage || "∞"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <div>{new Date(coupon.validFrom).toLocaleDateString()}</div>
-                      <div>{new Date(coupon.validUntil).toLocaleDateString()}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={coupon.isActive ? "default" : "secondary"}>
-                      {coupon.isActive ? "Ativo" : "Inativo"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => handleEdit(coupon)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDelete(coupon.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          <div className="relative mb-4">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Input
+              placeholder="Buscar por código do cupom..."
+              className="pl-8"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead>Mínimo</TableHead>
+                  <TableHead>Uso Limite</TableHead>
+                  <TableHead>Usado</TableHead>
+                  <TableHead>Expiração</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredCoupons.map((coupon) => (
+                  <TableRow key={coupon.id}>
+                    <TableCell className="font-medium">{coupon.code}</TableCell>
+                    <TableCell>{coupon.discountType}</TableCell>
+                    <TableCell>{formatDiscount(coupon)}</TableCell>
+                    <TableCell>
+                      {coupon.minimumAmount ? `R$ ${Number(coupon.minimumAmount).toFixed(2)}` : "-"}
+                    </TableCell>
+                    <TableCell>{coupon.usageLimit ? coupon.usageLimit : "Ilimitado"}</TableCell>
+                    <TableCell>{coupon.usedCount}</TableCell>
+                    <TableCell>
+                      {coupon.expirationDate ? new Date(coupon.expirationDate).toLocaleDateString() : "-"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={coupon.isActive ? "default" : "destructive"}>
+                        {coupon.isActive ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(coupon)}>
+                        Editar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      <CouponModal open={showModal} onClose={handleModalClose} coupon={selectedCoupon} />
+      <CouponModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSave}
+        coupon={selectedCoupon}
+      />
     </div>
   )
 }

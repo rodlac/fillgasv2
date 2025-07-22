@@ -1,163 +1,134 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Search, CheckCircle, Eye } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Search } from "lucide-react"
+
+interface Booking {
+  id: string
+  client: {
+    name: string
+  }
+}
 
 interface Payment {
   id: string
   bookingId: string
-  booking: {
-    client: {
-      name: string
-    }
-  }
+  booking: Booking
   amount: number
-  discountAmount?: number
-  finalAmount: number
-  paymentMethod: string
   status: string
-  transactionId?: string
-  proofOfPaymentUrl?: string
-  verificationNotes?: string
-  createdAt: string
+  method: string
+  paymentDate: string
+  transactionId?: string | null
+  proofUrl?: string | null
+  verificationNotes?: string | null
 }
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState("") // For future filtering by client name/booking ID
-  const { toast } = useToast()
-
-  const fetchPayments = async () => {
-    setLoading(true)
-    try {
-      const response = await fetch(`/api/payments?search=${search}`)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
-      setPayments(data.payments || []) // Ensure it's always an array
-    } catch (error) {
-      console.error("Failed to fetch payments:", error)
-      toast({
-        title: "Erro",
-        description: "Erro ao carregar pagamentos",
-        variant: "destructive",
-      })
-      setPayments([]) // Set to empty array on error
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
     fetchPayments()
-  }, [search])
+  }, [])
 
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "default"
-      case "pending":
-      case "awaiting_transfer":
-        return "secondary"
-      case "failed":
-      case "cancelled":
-        return "destructive"
-      default:
-        return "outline"
+  const fetchPayments = async () => {
+    try {
+      const res = await fetch("/api/payments")
+      if (!res.ok) {
+        throw new Error("Failed to fetch payments")
+      }
+      const data = await res.json()
+      setPayments(data || []) // Ensure it's an array
+    } catch (error) {
+      console.error("Error fetching payments:", error)
+      setPayments([]) // Set to empty array on error
     }
   }
 
-  if (loading) {
-    return <div>Carregando...</div>
+  const filteredPayments = payments.filter(
+    (payment) =>
+      payment.booking?.client?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.transactionId?.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
+
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case "PENDING":
+        return "secondary"
+      case "CONFIRMED":
+        return "default"
+      case "FAILED":
+        return "destructive"
+      case "REFUNDED":
+        return "outline"
+      default:
+        return "secondary"
+    }
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pagamentos</h1>
-          <p className="text-gray-600">Visualize e acompanhe todas as transações financeiras</p>
-        </div>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Pagamentos</h1>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Lista de Pagamentos</CardTitle>
-          <div className="flex items-center space-x-2">
-            <Search className="h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Buscar por cliente ou agendamento..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-sm"
-            />
-          </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Agendamento ID</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Valor Original</TableHead>
-                <TableHead>Desconto</TableHead>
-                <TableHead>Valor Final</TableHead>
-                <TableHead>Método</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {payments.map((payment) => (
-                <TableRow key={payment.id}>
-                  <TableCell className="font-medium">{payment.bookingId.substring(0, 8)}...</TableCell>
-                  <TableCell>{payment.booking.client.name}</TableCell>
-                  <TableCell>R$ {Number(payment.amount).toFixed(2)}</TableCell>
-                  <TableCell>R$ {Number(payment.discountAmount || 0).toFixed(2)}</TableCell>
-                  <TableCell>R$ {Number(payment.finalAmount).toFixed(2)}</TableCell>
-                  <TableCell>{payment.paymentMethod}</TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusBadgeVariant(payment.status)}>{payment.status}</Badge>
-                  </TableCell>
-                  <TableCell>{new Date(payment.createdAt).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    {payment.proofOfPaymentUrl && payment.status === "awaiting_transfer" && (
-                      <Button variant="outline" size="sm" className="mr-2 bg-transparent">
-                        <CheckCircle className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {payment.transactionId && (
-                      <Button variant="outline" size="sm" asChild>
-                        <a
-                          href={`https://www.asaas.com/transactions/${payment.transactionId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <Search className="h-4 w-4" />
-                        </a>
-                      </Button>
-                    )}
-                    {payment.proofOfPaymentUrl && (
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={payment.proofOfPaymentUrl} target="_blank" rel="noopener noreferrer">
-                          <Eye className="h-4 w-4" />
-                        </a>
-                      </Button>
-                    )}
-                  </TableCell>
+          <div className="relative mb-4">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Input
+              placeholder="Buscar por cliente ou ID da transação..."
+              className="pl-8"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead>Método</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>ID Transação</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredPayments.map((payment) => (
+                  <TableRow key={payment.id}>
+                    <TableCell className="font-medium">{payment.booking?.client?.name || "N/A"}</TableCell>
+                    <TableCell>{new Date(payment.paymentDate).toLocaleDateString()}</TableCell>
+                    <TableCell>R$ {Number(payment.amount).toFixed(2)}</TableCell>
+                    <TableCell>{payment.method}</TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusVariant(payment.status)}>{payment.status}</Badge>
+                    </TableCell>
+                    <TableCell>{payment.transactionId || "-"}</TableCell>
+                    <TableCell className="text-right">
+                      {payment.proofUrl && (
+                        <Button variant="outline" size="sm" asChild>
+                          <a href={payment.proofUrl} target="_blank" rel="noreferrer">
+                            Ver Comprovante
+                          </a>
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

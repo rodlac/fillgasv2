@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const coupon = await prisma.coupon.findUnique({
       where: { id: params.id },
@@ -9,10 +9,11 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     if (!coupon) {
       return NextResponse.json({ message: "Coupon not found" }, { status: 404 })
     }
+    // Ensure discountValue and minimumAmount are converted to numbers for frontend
     const formattedCoupon = {
       ...coupon,
       discountValue: coupon.discountValue.toNumber(),
-      minimumAmount: coupon.minimumAmount?.toNumber() || null,
+      minimumAmount: coupon.minimumAmount?.toNumber(),
     }
     return NextResponse.json(formattedCoupon)
   } catch (error) {
@@ -21,28 +22,22 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
-    const body = await req.json()
-    const { code, discountType, discountValue, minimumAmount, maxUsage, validFrom, validUntil, isActive } = body
-
+    const data = await request.json()
     const updatedCoupon = await prisma.coupon.update({
       where: { id: params.id },
       data: {
-        code,
-        discountType,
-        discountValue: Number.parseFloat(discountValue),
-        minimumAmount: minimumAmount ? Number.parseFloat(minimumAmount) : null,
-        maxUsage: maxUsage ? Number.parseInt(maxUsage) : null,
-        validFrom: new Date(validFrom),
-        validUntil: new Date(validUntil),
-        isActive,
+        ...data,
+        discountValue: Number.parseFloat(data.discountValue),
+        minimumAmount: data.minimumAmount ? Number.parseFloat(data.minimumAmount) : null,
       },
     })
+    // Convert back to number for response
     const formattedCoupon = {
       ...updatedCoupon,
       discountValue: updatedCoupon.discountValue.toNumber(),
-      minimumAmount: updatedCoupon.minimumAmount?.toNumber() || null,
+      minimumAmount: updatedCoupon.minimumAmount?.toNumber(),
     }
     return NextResponse.json(formattedCoupon)
   } catch (error) {
@@ -51,12 +46,12 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
     await prisma.coupon.delete({
       where: { id: params.id },
     })
-    return new Response(null, { status: 204 })
+    return NextResponse.json({ message: "Coupon deleted" }, { status: 204 })
   } catch (error) {
     console.error("Error deleting coupon:", error)
     return NextResponse.json({ message: "Failed to delete coupon" }, { status: 500 })

@@ -1,15 +1,9 @@
-import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
-    const body = await req.json()
-    const { status, verificationNotes } = body
-
-    if (!status) {
-      return NextResponse.json({ message: "Status is required" }, { status: 400 })
-    }
-
+    const { status, verificationNotes } = await request.json()
     const updatedPayment = await prisma.payment.update({
       where: { id: params.id },
       data: { status, verificationNotes },

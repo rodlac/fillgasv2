@@ -1,15 +1,14 @@
-import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
 
 export async function GET() {
   try {
-    const coupons = await prisma.coupon.findMany({
-      orderBy: { createdAt: "desc" },
-    })
+    const coupons = await prisma.coupon.findMany()
+    // Ensure discountValue and minimumAmount are converted to numbers for frontend
     const formattedCoupons = coupons.map((coupon) => ({
       ...coupon,
       discountValue: coupon.discountValue.toNumber(),
-      minimumAmount: coupon.minimumAmount?.toNumber() || null,
+      minimumAmount: coupon.minimumAmount?.toNumber(),
     }))
     return NextResponse.json(formattedCoupons)
   } catch (error) {
@@ -18,31 +17,21 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const body = await req.json()
-    const { code, discountType, discountValue, minimumAmount, maxUsage, validFrom, validUntil, isActive } = body
-
-    if (!code || !discountType || discountValue === undefined || !validFrom || !validUntil) {
-      return NextResponse.json({ message: "Missing required fields" }, { status: 400 })
-    }
-
+    const data = await request.json()
     const newCoupon = await prisma.coupon.create({
       data: {
-        code,
-        discountType,
-        discountValue: Number.parseFloat(discountValue),
-        minimumAmount: minimumAmount ? Number.parseFloat(minimumAmount) : null,
-        maxUsage: maxUsage ? Number.parseInt(maxUsage) : null,
-        validFrom: new Date(validFrom),
-        validUntil: new Date(validUntil),
-        isActive: isActive ?? true,
+        ...data,
+        discountValue: Number.parseFloat(data.discountValue),
+        minimumAmount: data.minimumAmount ? Number.parseFloat(data.minimumAmount) : null,
       },
     })
+    // Convert back to number for response
     const formattedCoupon = {
       ...newCoupon,
       discountValue: newCoupon.discountValue.toNumber(),
-      minimumAmount: newCoupon.minimumAmount?.toNumber() || null,
+      minimumAmount: newCoupon.minimumAmount?.toNumber(),
     }
     return NextResponse.json(formattedCoupon, { status: 201 })
   } catch (error) {

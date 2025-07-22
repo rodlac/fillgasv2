@@ -1,15 +1,13 @@
-import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
 
 export async function GET() {
   try {
-    const services = await prisma.service.findMany({
-      orderBy: { name: "asc" },
-    })
-    // Convert Decimal to number for frontend consumption
+    const services = await prisma.service.findMany()
+    // Ensure price is converted to a number for frontend
     const formattedServices = services.map((service) => ({
       ...service,
-      price: service.price.toNumber(), // Ensure price is a number
+      price: service.price.toNumber(),
     }))
     return NextResponse.json(formattedServices)
   } catch (error) {
@@ -18,23 +16,21 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const body = await req.json()
-    const { name, price, isActive } = body
-
-    if (!name || price === undefined) {
-      return NextResponse.json({ message: "Name and price are required" }, { status: 400 })
-    }
-
+    const data = await request.json()
     const newService = await prisma.service.create({
       data: {
-        name,
-        price: Number.parseFloat(price), // Ensure price is stored as Decimal
-        isActive: isActive ?? true,
+        ...data,
+        price: Number.parseFloat(data.price), // Ensure price is stored as Decimal
       },
     })
-    return NextResponse.json(newService, { status: 201 })
+    // Convert price back to number for response
+    const formattedService = {
+      ...newService,
+      price: newService.price.toNumber(),
+    }
+    return NextResponse.json(formattedService, { status: 201 })
   } catch (error) {
     console.error("Error creating service:", error)
     return NextResponse.json({ message: "Failed to create service" }, { status: 500 })

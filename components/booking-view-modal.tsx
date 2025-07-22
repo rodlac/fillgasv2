@@ -1,9 +1,21 @@
 "use client"
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Separator } from "@/components/ui/separator"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { format } from "date-fns"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useToast } from "@/components/ui/use-toast"
+import { useState } from "react"
+
+interface Client {
+  id: string
+  name: string
+  email: string
+  phone: string
+  cpfCnpj: string
+  address: string
+}
 
 interface Service {
   id: string
@@ -11,139 +23,191 @@ interface Service {
   price: number
 }
 
+interface Coupon {
+  id: string
+  code: string
+  discountType: "PERCENTAGE" | "FIXED"
+  discountValue: number
+  minimumAmount?: number | null
+}
+
+interface Payment {
+  id: string
+  amount: number
+  status: string
+  method: string
+  paymentDate: string
+  transactionId?: string | null
+  proofUrl?: string | null
+  verificationNotes?: string | null
+}
+
 interface Booking {
   id: string
   clientId: string
-  client: {
-    name: string
-    email: string
-    phone: string
-  }
+  client: Client
+  bookingDate: string
   deliveryAddress: string
-  deliveryDate: string
-  paymentMethod: string
   status: string
-  totalPrice: number
-  discountAmount?: number
-  couponId?: string
-  bookingServices: Array<{
-    id: string
-    quantity: number
-    service: Service
-  }>
-  payments: Array<{
-    id: string
-    amount: number
-    finalAmount: number
-    status: string
-    paymentMethod: string
-    createdAt: string
-  }>
-  createdAt: string
+  totalAmount: number
+  discountAmount?: number | null
+  finalAmount: number
+  services: Service[]
+  coupon?: Coupon | null
+  payment?: Payment | null
 }
 
 interface BookingViewModalProps {
-  open: boolean
+  isOpen: boolean
   onClose: () => void
   booking: Booking | null
+  onEdit: () => void
+  onUpdateStatus: () => void
 }
 
-export function BookingViewModal({ open, onClose, booking }: BookingViewModalProps) {
-  if (!booking) return null
+export function BookingViewModal({ isOpen, onClose, booking, onEdit, onUpdateStatus }: BookingViewModalProps) {
+  const { toast } = useToast()
+  const [currentStatus, setCurrentStatus] = useState(booking?.status || "")
 
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case "COMPLETED":
-        return "default"
-      case "PENDING":
-      case "AWAITING_TRANSFER":
-        return "secondary"
-      case "CANCELLED":
-      case "FAILED":
-        return "destructive"
-      default:
-        return "outline"
+  const handleStatusChange = async (newStatus: string) => {
+    if (!booking) return
+
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}/status`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      if (!res.ok) {
+        throw new Error("Failed to update booking status")
+      }
+
+      setCurrentStatus(newStatus)
+      toast({
+        title: "Sucesso!",
+        description: `Status do agendamento atualizado para ${newStatus}.`,
+      })
+      onUpdateStatus() // Refresh data in parent component
+    } catch (error) {
+      console.error("Error updating status:", error)
+      toast({
+        title: "Erro",
+        description: "Falha ao atualizar status do agendamento.",
+        variant: "destructive",
+      })
     }
   }
 
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case "PENDING":
+        return "secondary"
+      case "CONFIRMED":
+        return "default"
+      case "IN_ROUTE":
+        return "outline"
+      case "DELIVERED":
+        return "success"
+      case "CANCELED":
+        return "destructive"
+      default:
+        return "secondary"
+    }
+  }
+
+  if (!booking) return null
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Detalhes do Agendamento #{booking.id.substring(0, 8)}</DialogTitle>
+          <DialogTitle>Detalhes do Agendamento</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="font-medium">Cliente:</div>
-            <div>{booking.client.name}</div>
-            <div className="font-medium">Email do Cliente:</div>
-            <div>{booking.client.email}</div>
-            <div className="font-medium">Telefone do Cliente:</div>
-            <div>{booking.client.phone}</div>
-            <div className="font-medium">Endereço de Entrega:</div>
-            <div>{booking.deliveryAddress}</div>
-            <div className="font-medium">Data de Entrega:</div>
-            <div>{format(new Date(booking.deliveryDate), "dd/MM/yyyy")}</div>
-            <div className="font-medium">Método de Pagamento:</div>
-            <div>{booking.paymentMethod}</div>
-            <div className="font-medium">Status:</div>
-            <div>
-              <Badge variant={getStatusBadgeVariant(booking.status)}>{booking.status}</Badge>
-            </div>
-            <div className="font-medium">Criado em:</div>
-            <div>{format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}</div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Cliente:</Label>
+            <span className="col-span-3 font-medium">{booking.client?.name}</span>
           </div>
-
-          <Separator className="my-4" />
-
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Serviços Agendados</h3>
-            {booking.bookingServices.length > 0 ? (
-              <ul className="list-disc pl-5 space-y-1">
-                {booking.bookingServices.map((bs) => (
-                  <li key={bs.id}>
-                    {bs.service.name} (x{bs.quantity}) - R$ {Number(bs.service.price).toFixed(2)} cada
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>Nenhum serviço agendado.</p>
-            )}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Data:</Label>
+            <span className="col-span-3">{new Date(booking.bookingDate).toLocaleDateString()}</span>
           </div>
-
-          <Separator className="my-4" />
-
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Resumo Financeiro</h3>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="font-medium">Valor Total dos Serviços:</div>
-              <div>R$ {Number(booking.totalPrice + (booking.discountAmount || 0)).toFixed(2)}</div>
-              <div className="font-medium">Desconto ({booking.couponId ? `Cupom: ${booking.couponId}` : "N/A"}):</div>
-              <div>- R$ {Number(booking.discountAmount || 0).toFixed(2)}</div>
-              <div className="font-medium text-lg">Valor Final:</div>
-              <div className="font-bold text-lg">R$ {Number(booking.totalPrice).toFixed(2)}</div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Endereço:</Label>
+            <span className="col-span-3">{booking.deliveryAddress}</span>
+          </div>
+          <div className="grid grid-cols-4 items-start gap-4">
+            <Label className="text-right pt-2">Serviços:</Label>
+            <div className="col-span-3 space-y-1">
+              {booking.services.map((service) => (
+                <div key={service.id}>
+                  {service.name} (R$ {Number(service.price).toFixed(2)})
+                </div>
+              ))}
             </div>
           </div>
-
-          <Separator className="my-4" />
-
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Histórico de Pagamentos</h3>
-            {booking.payments.length > 0 ? (
-              <ul className="list-disc pl-5 space-y-1">
-                {booking.payments.map((payment) => (
-                  <li key={payment.id}>
-                    R$ {Number(payment.finalAmount).toFixed(2)} via {payment.paymentMethod} - Status:{" "}
-                    <Badge variant={getStatusBadgeVariant(payment.status)}>{payment.status}</Badge> em{" "}
-                    {format(new Date(payment.createdAt), "dd/MM/yyyy HH:mm")}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>Nenhum pagamento registrado.</p>
-            )}
+          {booking.coupon && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Cupom:</Label>
+              <span className="col-span-3">
+                {booking.coupon.code} (
+                {booking.coupon.discountType === "PERCENTAGE"
+                  ? `${Number(booking.coupon.discountValue).toFixed(0)}%`
+                  : `R$ ${Number(booking.coupon.discountValue).toFixed(2)}`}
+                )
+              </span>
+            </div>
+          )}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Valor Total:</Label>
+            <span className="col-span-3">R$ {Number(booking.totalAmount).toFixed(2)}</span>
           </div>
+          {booking.discountAmount !== null && booking.discountAmount > 0 && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Desconto:</Label>
+              <span className="col-span-3">R$ {Number(booking.discountAmount).toFixed(2)}</span>
+            </div>
+          )}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right font-bold">Valor Final:</Label>
+            <span className="col-span-3 font-bold">R$ {Number(booking.finalAmount).toFixed(2)}</span>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Status:</Label>
+            <div className="col-span-3 flex items-center gap-2">
+              <Badge variant={getStatusVariant(currentStatus)}>{currentStatus}</Badge>
+              <Select value={currentStatus} onValueChange={handleStatusChange}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Alterar Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENDING">PENDENTE</SelectItem>
+                  <SelectItem value="CONFIRMED">CONFIRMADO</SelectItem>
+                  <SelectItem value="IN_ROUTE">EM ROTA</SelectItem>
+                  <SelectItem value="DELIVERED">ENTREGUE</SelectItem>
+                  <SelectItem value="CANCELED">CANCELADO</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {booking.payment && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Pagamento:</Label>
+              <span className="col-span-3">
+                R$ {Number(booking.payment.amount).toFixed(2)} ({booking.payment.method} - {booking.payment.status})
+              </span>
+            </div>
+          )}
         </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onEdit}>
+            Editar
+          </Button>
+          <Button onClick={onClose}>Fechar</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

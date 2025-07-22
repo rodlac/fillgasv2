@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
+import { BookingModalProvider, useBookingModal } from "@/contexts/booking-modal-context"
 
 interface Client {
   id: string
@@ -61,151 +62,66 @@ interface BookingModalProps {
   booking: Booking | null
 }
 
-export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalProps) {
+function BookingModalContent({ isOpen, onClose, onSave, booking }: BookingModalProps) {
   const { toast } = useToast()
+  const {
+    // Form state
+    clientId,
+    setClientId,
+    deliveryAddress,
+    setDeliveryAddress,
+    deliveryDate,
+    setDeliveryDate,
+    status,
+    setStatus,
+    amount,
+    discountAmount,
+    paymentMethod,
+    setPaymentMethod,
+    paymentStatus,
+    setPaymentStatus,
+    serviceIds,
+    notes,
+    setNotes,
 
-  // Form state
-  const [clientId, setClientId] = useState("")
-  const [deliveryAddress, setDeliveryAddress] = useState("")
-  const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString())
-  const [status, setStatus] = useState("scheduled")
-  const [amount, setAmount] = useState(0)
-  const [discountAmount, setDiscountAmount] = useState(0)
-  const [paymentMethod, setPaymentMethod] = useState("pix")
-  const [paymentStatus, setPaymentStatus] = useState("pending")
-  const [couponId, setCouponId] = useState<string | null>(null)
-  const [serviceIds, setServiceIds] = useState<string[]>([])
-  const [notes, setNotes] = useState("")
+    // Data state
+    clients,
+    services,
 
-  // Other state
-  const [loading, setLoading] = useState(false)
-  const [clients, setClients] = useState<Client[]>([])
-  const [services, setServices] = useState<Service[]>([])
-  const [coupons, setCoupons] = useState<Coupon[]>([])
-  const [selectedCouponCode, setSelectedCouponCode] = useState("")
-  const [couponValidationResult, setCouponValidationResult] = useState<{
-    isValid: boolean
-    discountAmount?: number
-    reason?: string
-    coupon?: { id: string; code: string; name: string }
-  } | null>(null)
+    // UI state
+    loading,
+    setLoading,
+    selectedCouponCode,
+    setSelectedCouponCode,
+    couponValidationResult,
+    setCouponValidationResult,
 
-  // Reset form when modal opens/closes
+    // Actions
+    resetForm,
+    loadBooking,
+    fetchInitialData,
+    validateCoupon,
+    toggleService,
+    calculateFinalAmount,
+  } = useBookingModal()
+
+  // Handle modal open/close and data loading
   useEffect(() => {
     if (!isOpen) {
-      // Reset all form fields
-      setClientId("")
-      setDeliveryAddress("")
-      setDeliveryDate(new Date().toISOString())
-      setStatus("scheduled")
-      setAmount(0)
-      setDiscountAmount(0)
-      setPaymentMethod("pix")
-      setPaymentStatus("pending")
-      setCouponId(null)
-      setServiceIds([])
-      setNotes("")
-      setSelectedCouponCode("")
-      setCouponValidationResult(null)
+      resetForm()
       return
     }
 
-    if (booking) {
-      console.log("Loading existing booking:", booking)
-      setClientId(booking.clientId)
-      setDeliveryAddress(booking.deliveryAddress)
-      setDeliveryDate(new Date(booking.deliveryDate).toISOString())
-      setStatus(booking.status)
-      setAmount(Number(booking.amount))
-      setDiscountAmount(Number(booking.discountAmount))
-      setPaymentMethod(booking.paymentMethod)
-      setPaymentStatus(booking.paymentStatus)
-      setCouponId(booking.couponId)
-      setServiceIds(booking.services?.map((s) => s.id) || [])
-      setNotes(booking.notes || "")
-      setSelectedCouponCode(booking.coupon?.code || "")
+    // Load data when modal opens
+    fetchInitialData()
 
-      if (booking.coupon) {
-        setCouponValidationResult({
-          isValid: true,
-          discountAmount: Number(booking.discountAmount),
-          coupon: {
-            id: booking.coupon.id,
-            code: booking.coupon.code,
-            name: booking.coupon.name,
-          },
-        })
-      }
+    // Load booking data if editing
+    if (booking) {
+      loadBooking(booking)
     } else {
-      console.log("Creating new booking - resetting form")
-      setClientId("")
-      setDeliveryAddress("")
-      setDeliveryDate(new Date().toISOString())
-      setStatus("scheduled")
-      setAmount(0)
-      setDiscountAmount(0)
-      setPaymentMethod("pix")
-      setPaymentStatus("pending")
-      setCouponId(null)
-      setServiceIds([])
-      setNotes("")
-      setSelectedCouponCode("")
-      setCouponValidationResult(null)
+      resetForm()
     }
   }, [isOpen, booking])
-
-  // Fetch initial data when modal opens
-  useEffect(() => {
-    if (!isOpen) return
-
-    const fetchData = async () => {
-      try {
-        console.log("Fetching initial data...")
-        const [clientsRes, servicesRes, couponsRes] = await Promise.all([
-          fetch("/api/clients"),
-          fetch("/api/services"),
-          fetch("/api/coupons"),
-        ])
-
-        const clientsData = await clientsRes.json()
-        const servicesData = await servicesRes.json()
-        const couponsData = await couponsRes.json()
-
-        console.log("Clients data:", clientsData)
-        console.log("Services data:", servicesData)
-        console.log("Coupons data:", couponsData)
-
-        setClients(Array.isArray(clientsData) ? clientsData : clientsData.clients || [])
-        setServices(Array.isArray(servicesData) ? servicesData : [])
-        setCoupons(Array.isArray(couponsData) ? couponsData : [])
-      } catch (error) {
-        console.error("Failed to fetch initial data:", error)
-        toast({
-          title: "Erro",
-          description: "Falha ao carregar dados iniciais para o agendamento.",
-          variant: "destructive",
-        })
-      }
-    }
-
-    fetchData()
-  }, [isOpen, toast])
-
-  // Calculate amount based on selected services
-  useEffect(() => {
-    const selectedServices = services.filter((s) => serviceIds.includes(s.id))
-    const totalAmount = selectedServices.reduce((sum, service) => sum + Number(service.price), 0)
-    setAmount(totalAmount)
-  }, [serviceIds, services])
-
-  // Apply coupon discount
-  useEffect(() => {
-    let discount = 0
-    if (couponValidationResult?.isValid && couponValidationResult.discountAmount !== undefined) {
-      discount = couponValidationResult.discountAmount
-    }
-    setDiscountAmount(discount)
-  }, [amount, couponValidationResult])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target
@@ -245,57 +161,9 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
     }
   }
 
-  const handleServiceToggle = (serviceId: string) => {
-    setServiceIds((prev) => {
-      const newServiceIds = prev.includes(serviceId) ? prev.filter((id) => id !== serviceId) : [...prev, serviceId]
-      console.log("Updated service IDs:", newServiceIds)
-      return newServiceIds
-    })
-  }
-
   const handleCouponCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedCouponCode(e.target.value)
     setCouponValidationResult(null)
-    setCouponId(null)
-  }
-
-  const handleValidateCoupon = async () => {
-    if (!selectedCouponCode || !clientId) {
-      setCouponValidationResult({ isValid: false, reason: "Código do cupom e cliente são obrigatórios." })
-      return
-    }
-    setLoading(true)
-    try {
-      console.log("Validating coupon:", {
-        code: selectedCouponCode,
-        clientId: clientId,
-        orderAmount: amount,
-      })
-      const res = await fetch("/api/coupons/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code: selectedCouponCode,
-          clientId: clientId,
-          orderAmount: amount,
-        }),
-      })
-      const data = await res.json()
-      console.log("Coupon validation result:", data)
-      setCouponValidationResult(data)
-      if (data.isValid) {
-        setCouponId(data.coupon.id)
-        toast({ title: "Sucesso", description: "Cupom validado com sucesso!" })
-      } else {
-        toast({ title: "Erro", description: `Cupom inválido: ${data.reason}`, variant: "destructive" })
-      }
-    } catch (error) {
-      console.error("Error validating coupon:", error)
-      toast({ title: "Erro", description: "Falha ao validar cupom.", variant: "destructive" })
-      setCouponValidationResult({ isValid: false, reason: "Erro na validação do cupom." })
-    } finally {
-      setLoading(false)
-    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -310,7 +178,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
       discountAmount,
       paymentMethod,
       paymentStatus,
-      couponId,
+      couponId: couponValidationResult?.isValid ? couponValidationResult.coupon?.id || null : null,
       serviceIds,
       notes,
     }
@@ -353,16 +221,14 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
       const method = booking ? "PUT" : "POST"
       const url = booking ? `/api/bookings/${booking.id}` : "/api/bookings"
 
-      const payload = formData
-
-      console.log("Sending request:", { method, url, payload })
+      console.log("Sending request:", { method, url, payload: formData })
 
       const res = await fetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(formData),
       })
 
       console.log("Response status:", res.status)
@@ -394,7 +260,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
     }
   }
 
-  const finalAmount = Math.max(0, amount - discountAmount)
+  const finalAmount = calculateFinalAmount()
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -477,7 +343,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
                     <Checkbox
                       id={`service-${service.id}`}
                       checked={serviceIds.includes(service.id)}
-                      onCheckedChange={() => handleServiceToggle(service.id)}
+                      onCheckedChange={() => toggleService(service.id)}
                     />
                     <Label htmlFor={`service-${service.id}`} className="text-sm">
                       {service.name} (R$ {Number(service.price).toFixed(2)})
@@ -500,7 +366,7 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
                 />
                 <Button
                   type="button"
-                  onClick={handleValidateCoupon}
+                  onClick={validateCoupon}
                   disabled={loading || !selectedCouponCode || !clientId}
                   size="sm"
                 >
@@ -621,5 +487,13 @@ export function BookingModal({ isOpen, onClose, onSave, booking }: BookingModalP
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+export function BookingModal(props: BookingModalProps) {
+  return (
+    <BookingModalProvider>
+      <BookingModalContent {...props} />
+    </BookingModalProvider>
   )
 }

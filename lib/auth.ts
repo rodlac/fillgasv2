@@ -1,11 +1,10 @@
 import { createServerClient } from "@supabase/ssr"
-import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 
-export async function getUser() {
+export async function createClient() {
   const cookieStore = await cookies()
 
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     cookies: {
       getAll() {
         return cookieStore.getAll()
@@ -21,6 +20,10 @@ export async function getUser() {
       },
     },
   })
+}
+
+export async function withPermission(handler: Function) {
+  const supabase = await createClient()
 
   const {
     data: { user },
@@ -28,29 +31,8 @@ export async function getUser() {
   } = await supabase.auth.getUser()
 
   if (error || !user) {
-    return null
+    return Response.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  return user
-}
-
-export function withPermission(permission: string) {
-  return <T extends any[]>(handler: (req: NextRequest, ...args: T) => Promise<NextResponse>) =>
-    async (req: NextRequest, ...args: T): Promise<NextResponse> => {
-      try {
-        const user = await getUser()
-
-        if (!user) {
-          return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
-
-        // For now, we'll allow all authenticated users
-        // In the future, you can implement role-based permissions here
-
-        return handler(req, ...args)
-      } catch (error) {
-        console.error("Auth error:", error)
-        return NextResponse.json({ error: "Authentication failed" }, { status: 401 })
-      }
-    }
+  return handler(user)
 }

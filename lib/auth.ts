@@ -1,9 +1,9 @@
-import { createServerClient } from "./supabase"
+import { createServerSupabaseClient } from "./supabase-server"
 import { prisma } from "./prisma"
 import type { NextRequest } from "next/server"
 
 export async function getCurrentUser(req?: NextRequest) {
-  const supabase = createServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const {
     data: { session },

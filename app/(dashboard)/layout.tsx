@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-browser"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 

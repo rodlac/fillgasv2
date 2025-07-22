@@ -1,79 +1,28 @@
-import { createServerSupabaseClient } from "@/lib/supabase-server" // Updated import
-import { prisma } from "./prisma"
 import type { NextRequest } from "next/server"
-
-export async function getSession() {
-  const supabase = createServerSupabaseClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  return session
-}
-
-export async function getUser() {
-  const supabase = createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  return user
-}
-
-export async function getCurrentUser(req?: NextRequest) {
-  const session = await getSession()
-
-  if (!session?.user) {
-    return null
-  }
-
-  // Get user from our database
-  const user = await prisma.v2_users.findUnique({
-    where: { email: session.user.email! },
-  })
-
-  return user
-}
-
-export async function checkPermission(userId: string, permission: string): Promise<boolean> {
-  const user = await prisma.v2_users.findUnique({
-    where: { id: userId },
-  })
-
-  if (!user || !user.isActive) {
-    return false
-  }
-
-  // Check user permissions
-  const permissions = (user.permissions as string[]) || []
-
-  // Admin has all permissions
-  if (permissions.includes("*") || user.role === "admin") {
-    return true
-  }
-
-  return permissions.includes(permission)
-}
-
-export function withAuth(handler: Function) {
-  return async (req: NextRequest, context: any) => {
-    const user = await getCurrentUser(req)
-
-    if (!user) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    return handler(req, context, user)
-  }
-}
+import { createServerSupabaseClient } from "@/lib/supabase-server"
 
 export function withPermission(permission: string) {
-  return (handler: Function) =>
-    withAuth(async (req: NextRequest, context: any, user: any) => {
-      const hasPermission = await checkPermission(user.id, permission)
+  return (handler: (req: NextRequest, context?: any) => Promise<Response>) =>
+    async (req: NextRequest, context?: any) => {
+      try {
+        const supabase = await createServerSupabaseClient()
 
-      if (!hasPermission) {
-        return Response.json({ error: "Forbidden" }, { status: 403 })
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser()
+
+        if (error || !user) {
+          return Response.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
+        // For now, we'll allow all authenticated users
+        // In the future, you can implement role-based permissions here
+
+        return handler(req, context)
+      } catch (error) {
+        console.error("Auth error:", error)
+        return Response.json({ error: "Internal server error" }, { status: 500 })
       }
-
-      return handler(req, context, user)
-    })
+    }
 }

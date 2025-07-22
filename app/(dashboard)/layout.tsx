@@ -4,9 +4,9 @@ import type React from "react"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase-browser"
-import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
+import { Sidebar } from "@/components/sidebar"
+import { supabase } from "@/lib/supabase-browser"
 
 export default function DashboardLayout({
   children,
@@ -24,9 +24,10 @@ export default function DashboardLayout({
 
       if (!session) {
         router.push("/login")
-      } else {
-        setLoading(false)
+        return
       }
+
+      setLoading(false)
     }
 
     checkAuth()
@@ -36,8 +37,6 @@ export default function DashboardLayout({
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         router.push("/login")
-      } else if (event === "SIGNED_IN" && session) {
-        setLoading(false)
       }
     })
 
@@ -46,20 +45,18 @@ export default function DashboardLayout({
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-lg">Carregando...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-100">
       <Sidebar />
-      <div className="lg:pl-64">
+      <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
-        <main className="py-6">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">{children}</div>
-        </main>
+        <main className="flex-1 overflow-auto p-6">{children}</main>
       </div>
     </div>
   )

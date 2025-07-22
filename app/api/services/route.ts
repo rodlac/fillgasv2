@@ -1,36 +1,27 @@
-import type { NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { withPermission } from "@/lib/auth"
 
-export const GET = withPermission("services:read")(async (req: NextRequest) => {
-  const { searchParams } = new URL(req.url)
-  const isActive = searchParams.get("isActive")
-
-  const where = isActive !== null ? { isActive: isActive === "true" } : {}
-
-  const services = await prisma.v2_services.findMany({
-    where,
-    orderBy: { name: "asc" },
-  })
-
-  return Response.json(services)
-})
-
-export const POST = withPermission("services:create")(async (req: NextRequest) => {
-  const body = await req.json()
-  const { name, price, isActive = true } = body
-
+export async function GET() {
   try {
-    const service = await prisma.v2_services.create({
-      data: {
-        name,
-        price,
-        isActive,
-      },
+    const services = await prisma.service.findMany()
+    return NextResponse.json(services)
+  } catch (error) {
+    console.error("Error fetching services:", error)
+    return NextResponse.json({ error: "Failed to fetch services" }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { name, description, price } = await request.json()
+
+    const newService = await prisma.service.create({
+      data: { name, description, price },
     })
 
-    return Response.json(service, { status: 201 })
+    return NextResponse.json(newService, { status: 201 })
   } catch (error) {
-    return Response.json({ error: "Erro ao criar serviço" }, { status: 500 })
+    console.error("Error creating service:", error)
+    return NextResponse.json({ error: "Failed to create service" }, { status: 500 })
   }
-})
+}

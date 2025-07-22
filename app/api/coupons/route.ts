@@ -1,25 +1,33 @@
-import type { NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { withPermission } from "@/lib/auth"
 
-export const GET = withPermission("coupons:read")(async (req: NextRequest) => {
-  const coupons = await prisma.v2_coupons.findMany({
-    orderBy: { createdAt: "desc" },
-  })
-
-  return Response.json(coupons)
-})
-
-export const POST = withPermission("coupons:create")(async (req: NextRequest) => {
-  const body = await req.json()
-
+export async function GET() {
   try {
-    const coupon = await prisma.v2_coupons.create({
-      data: body,
+    const coupons = await prisma.coupon.findMany()
+    return NextResponse.json(coupons)
+  } catch (error) {
+    console.error("Error fetching coupons:", error)
+    return NextResponse.json({ error: "Failed to fetch coupons" }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { code, discountType, value, expirationDate, isActive } = await request.json()
+
+    const newCoupon = await prisma.coupon.create({
+      data: {
+        code,
+        discountType,
+        value,
+        expirationDate: new Date(expirationDate),
+        isActive,
+      },
     })
 
-    return Response.json(coupon, { status: 201 })
+    return NextResponse.json(newCoupon, { status: 201 })
   } catch (error) {
-    return Response.json({ error: "Erro ao criar cupom" }, { status: 500 })
+    console.error("Error creating coupon:", error)
+    return NextResponse.json({ error: "Failed to create coupon" }, { status: 500 })
   }
-})
+}

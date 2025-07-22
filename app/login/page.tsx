@@ -34,9 +34,13 @@ export default function LoginPage() {
           description: error.message,
           variant: "destructive",
         })
-      } else {
-        router.push("/dashboard")
       }
+      // Removido: router.push("/dashboard")
+      // O middleware agora cuidará do redirecionamento se a autenticação for bem-sucedida.
+      // Uma atualização da página ou navegação para qualquer rota protegida fará com que o middleware atue.
+      // Para forçar uma reavaliação imediata pelo middleware, você pode usar router.refresh()
+      // ou window.location.reload(), mas geralmente não é necessário se o middleware estiver configurado corretamente.
+      router.refresh() // Força uma reavaliação da rota pelo middleware
     } catch (error) {
       toast({
         title: "Erro no login",

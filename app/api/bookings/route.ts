@@ -45,10 +45,10 @@ export const GET = withPermission("bookings:read")(async (req: NextRequest) => {
 })
 
 export const POST = withPermission("bookings:create")(async (req: NextRequest) => {
-  const body = await req.json()
-  const { clientId, deliveryAddress, deliveryDate, services, paymentMethod, couponId } = body
-
   try {
+    const body = await req.json()
+    const { clientId, deliveryAddress, deliveryDate, services, paymentMethod, couponId } = body
+
     // Validate client
     const client = await prisma.v2_clients.findUnique({
       where: { id: clientId },

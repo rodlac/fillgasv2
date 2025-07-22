@@ -1,53 +1,51 @@
-import type { NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { withPermission } from "@/lib/auth"
 
-export const GET = withPermission("clients:read")(async (req: NextRequest, { params }: { params: { id: string } }) => {
-  const client = await prisma.v2_clients.findUnique({
-    where: { id: params.id },
-    include: {
-      bookings: {
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      },
-    },
-  })
+export async function GET(request: Request, { params }: { params: { id: string } }) {
+  try {
+    const { id } = params
+    const client = await prisma.client.findUnique({
+      where: { id },
+    })
 
-  if (!client) {
-    return Response.json({ error: "Cliente não encontrado" }, { status: 404 })
+    if (!client) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 })
+    }
+
+    return NextResponse.json(client)
+  } catch (error) {
+    console.error("Error fetching client:", error)
+    return NextResponse.json({ error: "Failed to fetch client" }, { status: 500 })
   }
+}
 
-  return Response.json(client)
-})
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
+  try {
+    const { id } = params
+    const { name, email, phone, address } = await request.json()
 
-export const PUT = withPermission("clients:update")(
-  async (req: NextRequest, { params }: { params: { id: string } }) => {
-    const body = await req.json()
+    const updatedClient = await prisma.client.update({
+      where: { id },
+      data: { name, email, phone, address },
+    })
 
-    try {
-      const client = await prisma.v2_clients.update({
-        where: { id: params.id },
-        data: body,
-      })
+    return NextResponse.json(updatedClient)
+  } catch (error) {
+    console.error("Error updating client:", error)
+    return NextResponse.json({ error: "Failed to update client" }, { status: 500 })
+  }
+}
 
-      return Response.json(client)
-    } catch (error) {
-      return Response.json({ error: "Erro ao atualizar cliente" }, { status: 500 })
-    }
-  },
-)
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  try {
+    const { id } = params
+    await prisma.client.delete({
+      where: { id },
+    })
 
-export const DELETE = withPermission("clients:delete")(
-  async (req: NextRequest, { params }: { params: { id: string } }) => {
-    try {
-      await prisma.v2_clients.update({
-        where: { id: params.id },
-        data: { isActive: false },
-      })
-
-      return new Response(null, { status: 204 })
-    } catch (error) {
-      return Response.json({ error: "Erro ao desativar cliente" }, { status: 500 })
-    }
-  },
-)
+    return NextResponse.json({}, { status: 204 })
+  } catch (error) {
+    console.error("Error deleting client:", error)
+    return NextResponse.json({ error: "Failed to delete client" }, { status: 500 })
+  }
+}

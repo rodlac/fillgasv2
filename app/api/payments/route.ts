@@ -1,31 +1,37 @@
-import type { NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { withPermission } from "@/lib/auth"
 
-export const GET = withPermission("payments:read")(async (req: NextRequest) => {
-  const { searchParams } = new URL(req.url)
-  const status = searchParams.get("status")
-  const limit = Number.parseInt(searchParams.get("limit") || "10")
-  const offset = Number.parseInt(searchParams.get("offset") || "0")
-
-  const where = status ? { status } : {}
-
-  const [payments, total] = await Promise.all([
-    prisma.v2_payments.findMany({
-      where,
+export async function GET() {
+  try {
+    const payments = await prisma.payment.findMany({
       include: {
-        booking: {
-          include: {
-            client: true,
-          },
-        },
+        booking: true,
       },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      skip: offset,
-    }),
-    prisma.v2_payments.count({ where }),
-  ])
+    })
+    return NextResponse.json(payments)
+  } catch (error) {
+    console.error("Error fetching payments:", error)
+    return NextResponse.json({ error: "Failed to fetch payments" }, { status: 500 })
+  }
+}
 
-  return Response.json({ payments, total })
-})
+export async function POST(request: Request) {
+  try {
+    const { bookingId, amount, paymentMethod, status, transactionId } = await request.json()
+
+    const newPayment = await prisma.payment.create({
+      data: {
+        bookingId,
+        amount,
+        paymentMethod,
+        status,
+        transactionId,
+      },
+    })
+
+    return NextResponse.json(newPayment, { status: 201 })
+  } catch (error) {
+    console.error("Error creating payment:", error)
+    return NextResponse.json({ error: "Failed to create payment" }, { status: 500 })
+  }
+}

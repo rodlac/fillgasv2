@@ -1,172 +1,151 @@
-# FillGás - Sistema de Agendamento de Cilindros
+# FillGás - Sistema de Agendamento e Gestão de Entregas de Cilindros
 
-Sistema completo para gestão de agendamentos e entregas de cilindros de CO2.
+Este é o repositório do projeto FillGás, um sistema completo para agendamento e gestão de entregas de cilindros de gás.
 
-## 🚀 Tecnologias
+## Tecnologias Utilizadas
 
-- **Next.js 15** - Framework React
-- **TypeScript** - Linguagem de programação
-- **Prisma** - ORM para banco de dados
-- **Supabase** - Backend as a Service (Auth + PostgreSQL)
-- **Tailwind CSS** - Framework de CSS
-- **Shadcn/ui** - Biblioteca de componentes
+*   **Next.js 15 (App Router):** Framework React para aplicações web de alto desempenho.
+*   **Shadcn/ui:** Componentes de UI reutilizáveis e acessíveis, construídos com Tailwind CSS e Radix UI.
+*   **Prisma:** ORM moderno para Node.js e TypeScript, facilitando a interação com o banco de dados.
+*   **Tailwind CSS:** Framework CSS utilitário para estilização rápida e responsiva.
+*   **TypeScript:** Linguagem de programação que adiciona tipagem estática ao JavaScript.
+*   **Supabase:** Plataforma de código aberto que oferece funcionalidades de banco de dados (PostgreSQL), autenticação, armazenamento e APIs em tempo real.
 
-## 📋 Pré-requisitos
+## Funcionalidades Principais
 
-- Node.js 18+ 
-- Conta no Supabase
-- PostgreSQL (via Supabase)
+*   **Autenticação de Usuários:** Login e gerenciamento de sessões via Supabase Auth.
+*   **Gestão de Clientes:** Cadastro, edição e visualização de informações de clientes.
+*   **Gestão de Serviços:** Definição e gerenciamento de tipos de serviços/produtos (cilindros).
+*   **Agendamento de Entregas:** Criação e acompanhamento de agendamentos de entrega.
+*   **Gestão de Cupons:** Criação e validação de cupons de desconto.
+*   **Gestão de Pagamentos:** Registro e verificação de pagamentos.
+*   **Dashboard:** Visão geral e métricas do sistema.
 
-## ⚙️ Configuração
+## Configuração do Ambiente de Desenvolvimento
 
-### 1. Clone o repositório e instale dependências
+Para configurar o projeto localmente, siga os passos abaixo:
+
+### 1. Pré-requisitos
+
+Certifique-se de ter as seguintes ferramentas instaladas:
+
+*   Node.js (versão 18 ou superior)
+*   pnpm (gerenciador de pacotes, instale com `npm install -g pnpm`)
+*   Git
+*   Docker (opcional, para rodar o Supabase localmente)
+
+### 2. Clonar o Repositório
 
 \`\`\`bash
-npm install
+git clone https://github.com/rodlac/fillgasv2.git
+cd fillgasv2
 \`\`\`
 
-### 2. Configure as variáveis de ambiente
+### 3. Configurar Variáveis de Ambiente
 
-Copie o arquivo `.env.example` para `.env.local` e configure:
+Crie um arquivo `.env.local` na raiz do projeto e adicione as seguintes variáveis:
 
 \`\`\`env
-# Database
-DATABASE_URL="sua-url-do-supabase-postgres"
-
 # Supabase
-NEXT_PUBLIC_SUPABASE_URL="sua-url-do-supabase"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="sua-chave-anonima-do-supabase"
-SUPABASE_SERVICE_ROLE_KEY="sua-chave-de-servico-do-supabase"
+NEXT_PUBLIC_SUPABASE_URL="SUA_URL_SUPABASE"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="SUA_CHAVE_ANON_SUPABASE"
+SUPABASE_SERVICE_ROLE_KEY="SUA_CHAVE_SERVICE_ROLE_SUPABASE"
+DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres?schema=public"
 
-# Next.js
-NEXTAUTH_SECRET="uma-string-longa-e-aleatoria-para-seguranca"
-NEXTAUTH_URL="http://localhost:3000" # Para desenvolvimento local
+# NextAuth (para autenticação, se estiver usando)
+NEXTAUTH_SECRET="UMA_STRING_LONGA_E_ALEATORIA"
+NEXTAUTH_URL="http://localhost:3000"
+
+# Asaas (opcional, para gateway de pagamento)
+ASAAS_API_KEY="SUA_CHAVE_API_ASAAS"
+ASAAS_ENVIRONMENT="sandbox" # ou "production"
 \`\`\`
 
-### 3. Configure o banco de dados
+*   **Supabase:** Você pode encontrar suas chaves e URL no painel do Supabase, em "Project Settings" -> "API". A `DATABASE_URL` é a URL de conexão direta com o PostgreSQL.
+*   **NEXTAUTH_SECRET:** Gere uma string aleatória complexa (ex: `openssl rand -base64 32`).
+*   **ASAAS:** Se for integrar com Asaas, obtenha suas chaves no painel do Asaas.
+
+### 4. Instalar Dependências
 
 \`\`\`bash
-# Gerar cliente Prisma
+pnpm install
+\`\`\`
+
+### 5. Configurar o Banco de Dados (Prisma e Supabase)
+
+#### Opção A: Usando Supabase Remoto (Recomendado para desenvolvimento rápido)
+
+1.  Certifique-se de que suas variáveis `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` e `DATABASE_URL` no `.env.local` apontam para seu projeto Supabase remoto.
+2.  Execute as migrações do Prisma para criar as tabelas no seu banco de dados Supabase:
+    \`\`\`bash
+    npx prisma migrate dev --name initial_setup
+    \`\`\`
+    *   Este comando criará os arquivos de migração e os aplicará ao seu banco de dados.
+    *   Se você já tem tabelas e quer sincronizar o Prisma com elas, pode precisar de `npx prisma db pull` antes de `migrate dev`.
+
+3.  (Opcional) Se você tiver dados iniciais para popular o banco de dados, execute o script:
+    \`\`\`bash
+    pnpm run init-data
+    \`\`\`
+    *   Este comando executa o script `scripts/init-data.sql` no seu banco de dados.
+
+#### Opção B: Usando Supabase Local com Docker (Para um ambiente mais isolado)
+
+1.  Certifique-se de ter o Docker Desktop rodando.
+2.  Inicie o Supabase localmente:
+    \`\`\`bash
+    supabase start
+    \`\`\`
+    *   Isso iniciará os serviços do Supabase (PostgreSQL, Auth, etc.) em contêineres Docker.
+    *   As URLs e chaves para o ambiente local serão exibidas no terminal. Atualize seu `.env.local` com elas.
+3.  Execute as migrações do Prisma:
+    \`\`\`bash
+    npx prisma migrate dev --name initial_setup
+    \`\`\`
+4.  (Opcional) Popule com dados iniciais:
+    \`\`\`bash
+    pnpm run init-data
+    \`\`\`
+
+### 6. Gerar o Prisma Client
+
+Este passo é geralmente executado automaticamente após `pnpm install` ou `prisma migrate dev`, mas se precisar rodar manualmente:
+
+\`\`\`bash
 npx prisma generate
-
-# Criar tabelas no banco (isso vai criar as tabelas com o prefixo v2_)
-npx prisma db push
 \`\`\`
 
-### 4. Inserir dados iniciais
-
-**Importante:** Você deve executar este script SQL diretamente no SQL Editor do seu painel do Supabase.
-
-1.  Acesse seu painel do Supabase.
-2.  Vá para a seção "SQL Editor".
-3.  Crie um novo "Query" ou abra um existente.
-4.  Copie e cole todo o conteúdo do arquivo `scripts/init-data.sql` (disponível neste projeto) no editor.
-5.  Clique em "Run" para executar o script.
-
-### 5. Configurar usuário Admin no Supabase Auth
-
-1.  No seu painel do Supabase, vá para a seção "Authentication" > "Users".
-2.  Clique em "Invite" ou "Add user".
-3.  Crie um novo usuário com o email `admin@fillgas.com` e defina uma senha. Este usuário terá permissões de administrador no sistema.
-
-### 6. Executar o projeto
+### 7. Rodar a Aplicação
 
 \`\`\`bash
-npm run dev
+pnpm run dev
 \`\`\`
 
-Acesse: http://localhost:3000
+A aplicação estará disponível em `http://localhost:3000`.
 
-## 👤 Login Inicial
+## Estrutura do Projeto
 
-- **Email**: admin@fillgas.com
-- **Senha**: A senha que você definiu no passo 5.
+*   `app/`: Contém as rotas e páginas do Next.js (App Router).
+    *   `app/(dashboard)/`: Rotas protegidas que usam o layout do dashboard.
+    *   `app/api/`: Rotas de API.
+    *   `app/login/`: Página de login.
+*   `components/`: Componentes React reutilizáveis, incluindo os componentes Shadcn/ui.
+*   `lib/`: Funções utilitárias e configurações (Supabase, Prisma, Auth).
+*   `prisma/`: Schema do Prisma e migrações.
+*   `public/`: Arquivos estáticos.
+*   `scripts/`: Scripts para inicialização do banco de dados e outras tarefas.
+*   `styles/`: Arquivos CSS globais e de Tailwind.
 
-## 📁 Estrutura do Projeto
+## Deploy na Vercel
 
+1.  **Conecte seu Repositório Git:** Conecte seu repositório GitHub/GitLab/Bitbucket à Vercel.
+2.  **Variáveis de Ambiente:** Configure todas as variáveis de ambiente necessárias no painel da Vercel (as mesmas do `.env.local`).
+3.  **Build Command:** A Vercel detectará automaticamente o Next.js. Certifique-se de que o script `prebuild` no `package.json` (`npx prisma migrate deploy`) está configurado para aplicar as migrações.
+4.  **Deploy:** A Vercel fará o build e deploy da sua aplicação.
+
+---
+
+## Contribuição
+
+Sinta-se à vontade para contribuir com o projeto. Abra issues para bugs ou sugestões e envie pull requests com melhorias.
 \`\`\`
-├── app/                    # Páginas Next.js 15 (App Router)
-│   ├── (dashboard)/       # Páginas protegidas
-│   ├── api/               # Route Handlers (API)
-│   └── login/             # Página de login
-├── components/            # Componentes React
-├── lib/                   # Utilitários e configurações
-├── prisma/               # Schema do banco de dados
-└── scripts/              # Scripts de dados iniciais
-\`\`\`
-
-## 🔐 Sistema de Permissões
-
-O sistema utiliza RBAC (Role-Based Access Control):
-
-- **admin**: Acesso total (`["*"]`)
-- **user**: Acesso limitado a leitura
-
-## 📊 Funcionalidades
-
-### ✅ Implementadas
-- [x] Autenticação (Supabase Auth)
-- [x] Gestão de Clientes
-- [x] Gestão de Serviços  
-- [x] Dashboard com métricas
-- [x] Sistema de Cupons
-- [x] API completa com RBAC
-
-### 🚧 Em Desenvolvimento
-- [ ] Gestão de Agendamentos (UI)
-- [ ] Gestão de Pagamentos (UI)
-- [ ] Integração Gateway Asaas
-- [ ] Upload de Comprovantes
-- [ ] Relatórios e Analytics
-
-## 🛠️ Comandos Úteis
-
-\`\`\`bash
-# Desenvolvimento
-npm run dev
-
-# Build para produção
-npm run build
-
-# Prisma
-npm run db:generate    # Gerar cliente
-npm run db:push       # Aplicar schema
-npm run db:studio     # Interface visual
-
-# Linting
-npm run lint
-\`\`\`
-
-## 📝 API Endpoints
-
-### Clientes
-- `GET /api/clients` - Listar clientes
-- `POST /api/clients` - Criar cliente
-- `PUT /api/clients/[id]` - Atualizar cliente
-- `DELETE /api/clients/[id]` - Desativar cliente
-
-### Serviços
-- `GET /api/services` - Listar serviços
-- `POST /api/services` - Criar serviço
-- `PUT /api/services/[id]` - Atualizar serviço
-
-### Agendamentos
-- `GET /api/bookings` - Listar agendamentos
-- `POST /api/bookings` - Criar agendamento
-- `PATCH /api/bookings/[id]/status` - Atualizar status
-
-### Cupons
-- `GET /api/coupons` - Listar cupons
-- `POST /api/coupons` - Criar cupom
-- `POST /api/coupons/validate` - Validar cupom
-
-## 🔒 Segurança
-
-- Autenticação via Supabase Auth
-- Middleware de proteção de rotas
-- Validação de permissões por endpoint
-- Sanitização de dados de entrada
-
-## 📞 Suporte
-
-Para dúvidas ou problemas, abra uma issue no repositório.

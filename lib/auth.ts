@@ -1,10 +1,17 @@
-import { createServerClient } from "./supabase"
+import { createClient } from "@supabase/supabase-js"
 import { prisma } from "./prisma"
 import type { NextRequest } from "next/server"
 
-export async function getCurrentUser(req?: NextRequest) {
-  const supabase = createServerClient()
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error("Missing Supabase URL or Anon Key environment variables.")
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+export async function getCurrentUser(req?: NextRequest) {
   const {
     data: { session },
   } = await supabase.auth.getSession()

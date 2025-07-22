@@ -2,12 +2,16 @@ import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { withPermission } from "@/lib/auth"
 
-export const POST = withPermission(async (req: NextRequest) => {
-  try {
-    const { code, amount } = await req.json()
+async function handler(req: NextRequest) {
+  if (req.method !== "POST") {
+    return NextResponse.json({ error: "Method not allowed" }, { status: 405 })
+  }
 
-    if (!code || typeof amount !== "number") {
-      return NextResponse.json({ error: "Code and amount are required" }, { status: 400 })
+  try {
+    const { code } = await req.json()
+
+    if (!code) {
+      return NextResponse.json({ error: "Código do cupom é obrigatório" }, { status: 400 })
     }
 
     const coupon = await prisma.coupon.findUnique({
@@ -15,34 +19,32 @@ export const POST = withPermission(async (req: NextRequest) => {
     })
 
     if (!coupon) {
-      return NextResponse.json({ error: "Cupom inválido ou não encontrado." }, { status: 404 })
+      return NextResponse.json({ error: "Cupom não encontrado" }, { status: 404 })
     }
 
-    if (coupon.minimumAmount && amount < coupon.minimumAmount) {
-      return NextResponse.json(
-        { error: `Valor mínimo de R$ ${coupon.minimumAmount.toFixed(2)} para este cupom.` },
-        { status: 400 },
-      )
+    if (!coupon.isActive) {
+      return NextResponse.json({ error: "Cupom inativo" }, { status: 400 })
     }
 
-    let discountValue = 0
-    if (coupon.discountType === "fixed") {
-      discountValue = coupon.discountValue
-    } else if (coupon.discountType === "percentage") {
-      discountValue = amount * (coupon.discountValue / 100)
+    if (coupon.expiresAt && new Date() > coupon.expiresAt) {
+      return NextResponse.json({ error: "Cupom expirado" }, { status: 400 })
     }
 
-    // Ensure discount does not exceed the total amount
-    discountValue = Math.min(discountValue, amount)
+    if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) {
+      return NextResponse.json({ error: "Cupom esgotado" }, { status: 400 })
+    }
 
     return NextResponse.json({
-      valid: true,
-      coupon,
-      discountAmount: discountValue,
-      finalAmount: amount - discountValue,
+      id: coupon.id,
+      code: coupon.code,
+      discountType: coupon.discountType,
+      discountValue: coupon.discountValue,
+      description: coupon.description,
     })
   } catch (error) {
     console.error("Error validating coupon:", error)
-    return NextResponse.json({ error: "Falha ao validar cupom." }, { status: 500 })
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
-}, "admin")
+}
+
+export const POST = withPermission(handler)

@@ -1,162 +1,124 @@
 "use client"
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { format } from "date-fns"
-
-interface Client {
-  id: string
-  name: string
-  email: string
-  phone: string
-  document: string
-  address: string
-  city: string
-  state: string
-  zipCode: string
-}
-
-interface Service {
-  id: string
-  name: string
-  price: number
-}
-
-interface Coupon {
-  id: string
-  code: string
-  name: string
-  discountType: "percentage" | "fixed"
-  discountValue: number
-  minimumAmount: number | null
-}
-
-interface Booking {
-  id: string
-  clientId: string
-  client: Client
-  bookingDate: string
-  status: string
-  amount: number
-  discountAmount: number
-  finalAmount: number
-  paymentMethod: string
-  paymentStatus: string
-  couponId: string | null
-  coupon: Coupon | null
-  services: Service[]
-  createdAt: string
-}
+import { Badge } from "@/components/ui/badge"
+import { Calendar, Clock, MapPin, User, Wrench, FileText, Tag } from "lucide-react"
 
 interface BookingViewModalProps {
   isOpen: boolean
   onClose: () => void
-  booking: Booking | null
+  booking: any
 }
 
 export default function BookingViewModal({ isOpen, onClose, booking }: BookingViewModalProps) {
   if (!booking) return null
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "PENDING":
+        return "bg-yellow-100 text-yellow-800"
+      case "CONFIRMED":
+        return "bg-blue-100 text-blue-800"
+      case "IN_PROGRESS":
+        return "bg-purple-100 text-purple-800"
+      case "COMPLETED":
+        return "bg-green-100 text-green-800"
+      case "CANCELLED":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "PENDING":
+        return "Pendente"
+      case "CONFIRMED":
+        return "Confirmado"
+      case "IN_PROGRESS":
+        return "Em Andamento"
+      case "COMPLETED":
+        return "Concluído"
+      case "CANCELLED":
+        return "Cancelado"
+      default:
+        return status
+    }
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[700px]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Detalhes do Agendamento #{booking.id.substring(0, 8)}</DialogTitle>
+          <DialogTitle>Detalhes do Agendamento</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Cliente:</Label>
-            <span className="col-span-3 font-medium">{booking.client.name}</span>
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">#{booking.id}</h3>
+            <Badge className={getStatusColor(booking.status)}>{getStatusText(booking.status)}</Badge>
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Email do Cliente:</Label>
-            <span className="col-span-3">{booking.client.email}</span>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Telefone do Cliente:</Label>
-            <span className="col-span-3">{booking.client.phone}</span>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Data e Hora:</Label>
-            <span className="col-span-3">{format(new Date(booking.bookingDate), "dd/MM/yyyy HH:mm")}</span>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Status:</Label>
-            <span className="col-span-3">
-              <span
-                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  booking.status === "pending"
-                    ? "bg-yellow-100 text-yellow-800"
-                    : booking.status === "confirmed"
-                      ? "bg-blue-100 text-blue-800"
-                      : booking.status === "in_route"
-                        ? "bg-purple-100 text-purple-800"
-                        : booking.status === "delivered"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                }`}
-              >
-                {booking.status}
-              </span>
-            </span>
-          </div>
-          <div className="grid grid-cols-4 items-start gap-4">
-            <Label className="text-right pt-2">Serviços:</Label>
-            <div className="col-span-3">
-              {booking.services.length > 0 ? (
-                booking.services.map((service) => (
-                  <p key={service.id}>
-                    - {service.name} (R$ {Number(service.price).toFixed(2)})
-                  </p>
-                ))
-              ) : (
-                <p>Nenhum serviço selecionado.</p>
-              )}
+
+          <div className="space-y-4">
+            <div className="flex items-center space-x-3">
+              <User className="h-5 w-5 text-gray-500" />
+              <div>
+                <p className="font-medium">{booking.client?.name}</p>
+                <p className="text-sm text-gray-500">{booking.client?.email}</p>
+              </div>
             </div>
-          </div>
-          {booking.coupon && (
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Cupom:</Label>
-              <span className="col-span-3">
-                {booking.coupon.name} ({booking.coupon.code})
-              </span>
+
+            <div className="flex items-center space-x-3">
+              <Wrench className="h-5 w-5 text-gray-500" />
+              <div>
+                <p className="font-medium">{booking.service?.name}</p>
+                <p className="text-sm text-gray-500">R$ {booking.service?.price?.toFixed(2)}</p>
+              </div>
             </div>
-          )}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Valor Original:</Label>
-            <span className="col-span-3">R$ {Number(booking.amount).toFixed(2)}</span>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Desconto:</Label>
-            <span className="col-span-3">R$ {Number(booking.discountAmount).toFixed(2)}</span>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Valor Final:</Label>
-            <span className="col-span-3 font-bold text-lg">R$ {Number(booking.finalAmount).toFixed(2)}</span>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Método de Pagamento:</Label>
-            <span className="col-span-3">{booking.paymentMethod}</span>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Status do Pagamento:</Label>
-            <span className="col-span-3">
-              <span
-                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  booking.paymentStatus === "pending"
-                    ? "bg-yellow-100 text-yellow-800"
-                    : booking.paymentStatus === "paid"
-                      ? "bg-green-100 text-green-800"
-                      : "bg-red-100 text-red-800"
-                }`}
-              >
-                {booking.paymentStatus}
-              </span>
-            </span>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Criado Em:</Label>
-            <span className="col-span-3">{format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}</span>
+
+            <div className="flex items-center space-x-3">
+              <Calendar className="h-5 w-5 text-gray-500" />
+              <p>{new Date(booking.scheduledDate).toLocaleDateString("pt-BR")}</p>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <Clock className="h-5 w-5 text-gray-500" />
+              <p>{booking.scheduledTime}</p>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <MapPin className="h-5 w-5 text-gray-500" />
+              <p>{booking.address}</p>
+            </div>
+
+            {booking.couponCode && (
+              <div className="flex items-center space-x-3">
+                <Tag className="h-5 w-5 text-gray-500" />
+                <div>
+                  <p className="font-medium">Cupom: {booking.couponCode}</p>
+                  {booking.discountAmount && (
+                    <p className="text-sm text-green-600">Desconto: R$ {booking.discountAmount.toFixed(2)}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {booking.notes && (
+              <div className="flex items-start space-x-3">
+                <FileText className="h-5 w-5 text-gray-500 mt-0.5" />
+                <div>
+                  <p className="font-medium">Observações:</p>
+                  <p className="text-sm text-gray-600">{booking.notes}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-4 border-t">
+              <div className="flex justify-between items-center">
+                <span className="font-medium">Total:</span>
+                <span className="text-lg font-bold">R$ {booking.totalAmount?.toFixed(2) || "0.00"}</span>
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>

@@ -1,244 +1,241 @@
 "use client"
-
-import type React from "react"
-
-import { useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { format } from "date-fns"
+import { CalendarIcon } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { useBookingModal } from "@/contexts/booking-modal-context"
 
 export function BookingModal() {
   const {
-    // State
     isOpen,
-    isLoading,
-    clientId,
-    serviceIds,
-    scheduledDate,
-    scheduledTime,
-    notes,
-    paymentMethod,
-    status,
-    couponCode,
-    subtotal,
-    discountAmount,
-    finalAmount,
+    closeModal,
+    formData,
     clients,
     services,
-    errors,
-
-    // Actions
-    closeModal,
-    setClientId,
-    setServiceIds,
-    setScheduledDate,
-    setScheduledTime,
-    setNotes,
-    setPaymentMethod,
-    setStatus,
-    setCouponCode,
-    loadClients,
-    loadServices,
-    validateCoupon,
-    submitBooking,
+    loading,
+    submitting,
+    discountAmount,
+    totalAmount,
+    handleInputChange,
+    handleSelectChange,
+    handleServiceChange,
+    handleDateChange,
+    handleTimeChange,
+    handleCouponCodeChange,
+    handleSubmit,
+    couponError,
+    isEditMode,
   } = useBookingModal()
 
-  // Load data when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      console.log("Modal opened, loading data...")
-      loadClients()
-      loadServices()
-    }
-  }, [isOpen, loadClients, loadServices])
-
-  // Validate coupon when coupon code changes
-  useEffect(() => {
-    if (couponCode) {
-      const timeoutId = setTimeout(() => {
-        validateCoupon()
-      }, 500) // Debounce validation
-
-      return () => clearTimeout(timeoutId)
-    }
-  }, [couponCode, validateCoupon])
-
-  const handleServiceToggle = (serviceId: string, checked: boolean) => {
-    console.log("Toggling service:", serviceId, checked)
-    if (checked) {
-      setServiceIds([...serviceIds, serviceId])
-    } else {
-      setServiceIds(serviceIds.filter((id) => id !== serviceId))
-    }
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log("Form submitted")
-    submitBooking()
+  if (loading) {
+    return null // Or a loading spinner
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={closeModal}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <Dialog
+      open={isOpen}
+      onOpenChange={(setOpen) => {
+        if (!setOpen) closeModal()
+      }}
+    >
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Novo Agendamento</DialogTitle>
+          <DialogTitle>{isEditMode ? "Editar Agendamento" : "Novo Agendamento"}</DialogTitle>
         </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Client Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="client">Cliente *</Label>
-            <Select value={clientId} onValueChange={setClientId}>
-              <SelectTrigger>
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="clientId" className="text-right">
+              Cliente
+            </Label>
+            <Select onValueChange={handleSelectChange("clientId")} value={formData.clientId}>
+              <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Selecione um cliente" />
               </SelectTrigger>
               <SelectContent>
                 {clients.map((client) => (
                   <SelectItem key={client.id} value={client.id}>
-                    {client.name} - {client.email}
+                    {client.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {errors.clientId && <p className="text-sm text-red-500">{errors.clientId}</p>}
           </div>
 
-          {/* Services Selection */}
-          <div className="space-y-2">
-            <Label>Serviços *</Label>
-            <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="deliveryAddress" className="text-right">
+              Endereço de Entrega
+            </Label>
+            <Input
+              id="deliveryAddress"
+              name="deliveryAddress"
+              value={formData.deliveryAddress}
+              onChange={handleInputChange}
+              className="col-span-3"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="deliveryDate" className="text-right">
+              Data
+            </Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "col-span-3 justify-start text-left font-normal",
+                    !formData.deliveryDate && "text-muted-foreground",
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {formData.deliveryDate ? format(formData.deliveryDate, "PPP") : <span>Selecione uma data</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar mode="single" selected={formData.deliveryDate} onSelect={handleDateChange} initialFocus />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="deliveryTime" className="text-right">
+              Hora
+            </Label>
+            <Input
+              id="deliveryTime"
+              name="deliveryTime"
+              type="time"
+              value={formData.deliveryTime}
+              onChange={handleInputChange}
+              className="col-span-3"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-4 items-start gap-4">
+            <Label className="text-right pt-2">Serviços</Label>
+            <div className="col-span-3 grid gap-2">
               {services.map((service) => (
                 <div key={service.id} className="flex items-center space-x-2">
                   <Checkbox
                     id={`service-${service.id}`}
-                    checked={serviceIds.includes(service.id)}
-                    onCheckedChange={(checked) => handleServiceToggle(service.id, checked as boolean)}
+                    checked={formData.serviceIds.includes(service.id)}
+                    onCheckedChange={() => handleServiceChange(service.id)}
                   />
-                  <Label htmlFor={`service-${service.id}`} className="flex-1 cursor-pointer">
-                    {service.name} - R$ {service.price.toFixed(2)}
+                  <Label htmlFor={`service-${service.id}`}>
+                    {service.name} (R$ {Number(service.price).toFixed(2)})
                   </Label>
                 </div>
               ))}
             </div>
-            {errors.serviceIds && <p className="text-sm text-red-500">{errors.serviceIds}</p>}
           </div>
 
-          {/* Date and Time */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="date">Data *</Label>
-              <Input
-                id="date"
-                type="date"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                min={new Date().toISOString().split("T")[0]}
-              />
-              {errors.scheduledDate && <p className="text-sm text-red-500">{errors.scheduledDate}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="time">Horário *</Label>
-              <Input id="time" type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} />
-              {errors.scheduledTime && <p className="text-sm text-red-500">{errors.scheduledTime}</p>}
-            </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="couponCode" className="text-right">
+              Cupom
+            </Label>
+            <Input
+              id="couponCode"
+              name="couponCode"
+              value={formData.couponCode}
+              onChange={(e) => handleCouponCodeChange(e.target.value)}
+              className="col-span-3"
+              placeholder="Código do cupom"
+            />
+            {couponError && <p className="col-span-4 text-right text-sm text-red-500">{couponError}</p>}
           </div>
 
-          {/* Payment Method */}
-          <div className="space-y-2">
-            <Label htmlFor="payment-method">Método de Pagamento *</Label>
-            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o método de pagamento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="CASH">Dinheiro</SelectItem>
-                <SelectItem value="CREDIT_CARD">Cartão de Crédito</SelectItem>
-                <SelectItem value="DEBIT_CARD">Cartão de Débito</SelectItem>
-                <SelectItem value="PIX">PIX</SelectItem>
-                <SelectItem value="BANK_TRANSFER">Transferência Bancária</SelectItem>
-              </SelectContent>
-            </Select>
-            {errors.paymentMethod && <p className="text-sm text-red-500">{errors.paymentMethod}</p>}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="notes" className="text-right">
+              Observações
+            </Label>
+            <Textarea
+              id="notes"
+              name="notes"
+              value={formData.notes}
+              onChange={handleInputChange}
+              className="col-span-3"
+              placeholder="Observações adicionais"
+            />
           </div>
 
-          {/* Status */}
-          <div className="space-y-2">
-            <Label htmlFor="status">Status</Label>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="status" className="text-right">
+              Status
+            </Label>
+            <Select onValueChange={handleSelectChange("status")} value={formData.status}>
+              <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Selecione o status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="PENDING">Pendente</SelectItem>
-                <SelectItem value="CONFIRMED">Confirmado</SelectItem>
-                <SelectItem value="IN_PROGRESS">Em Andamento</SelectItem>
-                <SelectItem value="COMPLETED">Concluído</SelectItem>
-                <SelectItem value="CANCELLED">Cancelado</SelectItem>
+                <SelectItem value="scheduled">Agendado</SelectItem>
+                <SelectItem value="completed">Concluído</SelectItem>
+                <SelectItem value="cancelled">Cancelado</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Coupon Code */}
-          <div className="space-y-2">
-            <Label htmlFor="coupon">Código do Cupom</Label>
-            <Input
-              id="coupon"
-              value={couponCode}
-              onChange={(e) => setCouponCode(e.target.value)}
-              placeholder="Digite o código do cupom"
-            />
-            {errors.couponCode && <p className="text-sm text-red-500">{errors.couponCode}</p>}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="paymentMethod" className="text-right">
+              Método de Pagamento
+            </Label>
+            <Select onValueChange={handleSelectChange("paymentMethod")} value={formData.paymentMethod}>
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Selecione o método" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pix">PIX</SelectItem>
+                <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
+                <SelectItem value="debit_card">Cartão de Débito</SelectItem>
+                <SelectItem value="cash">Dinheiro</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="notes">Observações</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Observações adicionais..."
-              rows={3}
-            />
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="paymentStatus" className="text-right">
+              Status do Pagamento
+            </Label>
+            <Select onValueChange={handleSelectChange("paymentStatus")} value={formData.paymentStatus}>
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Selecione o status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="paid">Pago</SelectItem>
+                <SelectItem value="refunded">Reembolsado</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Totals */}
-          {serviceIds.length > 0 && (
-            <div className="border-t pt-4 space-y-2">
-              <div className="flex justify-between">
-                <span>Subtotal:</span>
-                <span>R$ {subtotal.toFixed(2)}</span>
-              </div>
-              {discountAmount > 0 && (
-                <div className="flex justify-between text-green-600">
-                  <span>Desconto:</span>
-                  <span>- R$ {discountAmount.toFixed(2)}</span>
-                </div>
-              )}
-              <div className="flex justify-between font-bold text-lg border-t pt-2">
-                <span>Total:</span>
-                <span>R$ {finalAmount.toFixed(2)}</span>
-              </div>
-            </div>
-          )}
+          <div className="grid grid-cols-4 items-center gap-4 font-bold mt-4">
+            <Label className="text-right">Subtotal</Label>
+            <div className="col-span-3">R$ {totalAmount.toFixed(2)}</div>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4 font-bold">
+            <Label className="text-right">Desconto</Label>
+            <div className="col-span-3">R$ {discountAmount.toFixed(2)}</div>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4 font-bold text-lg">
+            <Label className="text-right">Total</Label>
+            <div className="col-span-3">R$ {totalAmount.toFixed(2)}</div>
+          </div>
 
-          {/* Submit Error */}
-          {errors.submit && <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">{errors.submit}</div>}
-
-          {/* Actions */}
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={closeModal} disabled={isLoading}>
+          <div className="flex justify-end gap-2 mt-6">
+            <Button variant="outline" onClick={closeModal} type="button">
               Cancelar
             </Button>
-            <Button type="submit" disabled={isLoading || serviceIds.length === 0}>
-              {isLoading ? "Criando..." : "Criar Agendamento"}
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Salvando..." : isEditMode ? "Salvar Alterações" : "Criar Agendamento"}
             </Button>
           </div>
         </form>

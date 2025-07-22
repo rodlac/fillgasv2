@@ -1,23 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
-import prisma from "@/lib/prisma" // Changed to default import
+import { prisma } from "@/lib/prisma" // Changed to named import
 import { withPermission } from "@/lib/auth"
 
-export const PUT = withPermission("payments:verify")(
+export const PUT = withPermission("payments:update")(
   async (req: NextRequest, { params }: { params: { id: string } }) => {
     try {
       const body = await req.json()
-      const { paymentStatus, verificationNotes } = body
+      const { status } = body
 
-      if (!paymentStatus) {
-        return NextResponse.json({ error: "Payment status is required" }, { status: 400 })
+      if (!status) {
+        return NextResponse.json({ error: "Status is required" }, { status: 400 })
       }
 
       const updatedPayment = await prisma.v2_payments.update({
         where: { id: params.id },
-        data: {
-          paymentStatus,
-          verificationNotes,
-        },
+        data: { status },
       })
 
       return NextResponse.json(updatedPayment)

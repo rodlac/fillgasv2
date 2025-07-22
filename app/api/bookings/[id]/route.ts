@@ -1,119 +1,82 @@
-import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
+import { type NextRequest, NextResponse } from "next/server"
+import prisma from "@/lib/prisma" // Changed to default import
+import { withPermission } from "@/lib/auth"
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export const GET = withPermission("bookings:read")(async (req: NextRequest, { params }: { params: { id: string } }) => {
   try {
-    const booking = await prisma.booking.findUnique({
+    const booking = await prisma.v2_bookings.findUnique({
       where: { id: params.id },
       include: {
         client: true,
         services: true,
         coupon: true,
-        payment: true,
       },
     })
     if (!booking) {
-      return NextResponse.json({ message: "Booking not found" }, { status: 404 })
+      return NextResponse.json({ error: "Booking not found" }, { status: 404 })
     }
-
-    const formattedBooking = {
+    return NextResponse.json({
       ...booking,
-      totalAmount: booking.totalAmount.toNumber(),
-      discountAmount: booking.discountAmount?.toNumber(),
-      finalAmount: booking.finalAmount.toNumber(),
+      amount: Number(booking.amount),
+      discountAmount: Number(booking.discountAmount),
+      finalAmount: Number(booking.finalAmount),
       services: booking.services.map((service) => ({
         ...service,
-        price: service.price.toNumber(),
+        price: Number(service.price),
       })),
       coupon: booking.coupon
         ? {
             ...booking.coupon,
-            discountValue: booking.coupon.discountValue.toNumber(),
-            minimumAmount: booking.coupon.minimumAmount?.toNumber(),
+            discountValue: Number(booking.coupon.discountValue),
+            minimumAmount: booking.coupon.minimumAmount ? Number(booking.coupon.minimumAmount) : null,
           }
         : null,
-      payment: booking.payment
-        ? {
-            ...booking.payment,
-            amount: booking.payment.amount.toNumber(),
-          }
-        : null,
-    }
-
-    return NextResponse.json(formattedBooking)
+    })
   } catch (error) {
     console.error("Error fetching booking:", error)
-    return NextResponse.json({ message: "Failed to fetch booking" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch booking" }, { status: 500 })
   }
-}
+})
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const data = await request.json()
-    const { client, services, couponId, ...bookingData } = data
-
-    const updatedBooking = await prisma.booking.update({
-      where: { id: params.id },
-      data: {
-        ...bookingData,
-        totalAmount: Number.parseFloat(bookingData.totalAmount),
-        discountAmount: bookingData.discountAmount ? Number.parseFloat(bookingData.discountAmount) : null,
-        finalAmount: Number.parseFloat(bookingData.finalAmount),
-        client: {
-          connect: { id: client.id },
+export const PUT = withPermission("bookings:update")(
+  async (req: NextRequest, { params }: { params: { id: string } }) => {
+    try {
+      const body = await req.json()
+      const updatedBooking = await prisma.v2_bookings.update({
+        where: { id: params.id },
+        data: {
+          clientId: body.clientId,
+          bookingDate: new Date(body.bookingDate),
+          status: body.status,
+          amount: Number.parseFloat(body.amount),
+          discountAmount: Number.parseFloat(body.discountAmount),
+          finalAmount: Number.parseFloat(body.finalAmount),
+          paymentMethod: body.paymentMethod,
+          paymentStatus: body.paymentStatus,
+          couponId: body.couponId || null,
+          services: {
+            set: body.serviceIds.map((id: string) => ({ id })), // Disconnect all and reconnect selected
+          },
         },
-        services: {
-          set: services.map((service: { id: string }) => ({ id: service.id })), // Use set to update many-to-many
-        },
-        ...(couponId && { coupon: { connect: { id: couponId } } }),
-      },
-      include: {
-        client: true,
-        services: true,
-        coupon: true,
-        payment: true,
-      },
-    })
-
-    const formattedBooking = {
-      ...updatedBooking,
-      totalAmount: updatedBooking.totalAmount.toNumber(),
-      discountAmount: updatedBooking.discountAmount?.toNumber(),
-      finalAmount: updatedBooking.finalAmount.toNumber(),
-      services: updatedBooking.services.map((service) => ({
-        ...service,
-        price: service.price.toNumber(),
-      })),
-      coupon: updatedBooking.coupon
-        ? {
-            ...updatedBooking.coupon,
-            discountValue: updatedBooking.coupon.discountValue.toNumber(),
-            minimumAmount: updatedBooking.coupon.minimumAmount?.toNumber(),
-          }
-        : null,
-      payment: updatedBooking.payment
-        ? {
-            ...updatedBooking.payment,
-            amount: updatedBooking.payment.amount.toNumber(),
-          }
-        : null,
+      })
+      return NextResponse.json(updatedBooking)
+    } catch (error) {
+      console.error("Error updating booking:", error)
+      return NextResponse.json({ error: "Failed to update booking" }, { status: 500 })
     }
+  },
+)
 
-    return NextResponse.json(formattedBooking)
-  } catch (error) {
-    console.error("Error updating booking:", error)
-    return NextResponse.json({ message: "Failed to update booking" }, { status: 500 })
-  }
-}
-
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  try {
-    await prisma.booking.delete({
-      where: { id: params.id },
-    })
-    return NextResponse.json({ message: "Booking deleted" }, { status: 204 })
-  } catch (error) {
-    console.error("Error deleting booking:", error)
-    return NextResponse.json({ message: "Failed to delete booking" }, { status: 500 })
-  }
-}
+export const DELETE = withPermission("bookings:delete")(
+  async (req: NextRequest, { params }: { params: { id: string } }) => {
+    try {
+      await prisma.v2_bookings.delete({
+        where: { id: params.id },
+      })
+      return new Response(null, { status: 204 })
+    } catch (error) {
+      console.error("Error deleting booking:", error)
+      return NextResponse.json({ error: "Failed to delete booking" }, { status: 500 })
+    }
+  },
+)

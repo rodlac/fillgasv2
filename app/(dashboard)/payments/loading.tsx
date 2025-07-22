@@ -75,6 +75,9 @@ export default function PaymentsLoading() {
           </div>
         </CardContent>
       </Card>
+      <div className="flex justify-center items-center h-full">
+        <p>Carregando pagamentos...</p>
+      </div>
     </div>
   )
 }

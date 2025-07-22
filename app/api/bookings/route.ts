@@ -1,104 +1,64 @@
-import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
+import { type NextRequest, NextResponse } from "next/server"
+import prisma from "@/lib/prisma" // Changed to default import
+import { withPermission } from "@/lib/auth"
 
-export async function GET() {
+export const GET = withPermission("bookings:read")(async (req: NextRequest) => {
   try {
-    const bookings = await prisma.booking.findMany({
+    const bookings = await prisma.v2_bookings.findMany({
       include: {
         client: true,
         services: true,
         coupon: true,
-        payment: true,
       },
+      orderBy: { createdAt: "desc" },
     })
-
-    const formattedBookings = bookings.map((booking) => ({
-      ...booking,
-      totalAmount: booking.totalAmount.toNumber(),
-      discountAmount: booking.discountAmount?.toNumber(),
-      finalAmount: booking.finalAmount.toNumber(),
-      services: booking.services.map((service) => ({
-        ...service,
-        price: service.price.toNumber(),
+    return NextResponse.json(
+      bookings.map((booking) => ({
+        ...booking,
+        amount: Number(booking.amount),
+        discountAmount: Number(booking.discountAmount),
+        finalAmount: Number(booking.finalAmount),
+        services: booking.services.map((service) => ({
+          ...service,
+          price: Number(service.price),
+        })),
+        coupon: booking.coupon
+          ? {
+              ...booking.coupon,
+              discountValue: Number(booking.coupon.discountValue),
+              minimumAmount: booking.coupon.minimumAmount ? Number(booking.coupon.minimumAmount) : null,
+            }
+          : null,
       })),
-      coupon: booking.coupon
-        ? {
-            ...booking.coupon,
-            discountValue: booking.coupon.discountValue.toNumber(),
-            minimumAmount: booking.coupon.minimumAmount?.toNumber(),
-          }
-        : null,
-      payment: booking.payment
-        ? {
-            ...booking.payment,
-            amount: booking.payment.amount.toNumber(),
-          }
-        : null,
-    }))
-
-    return NextResponse.json(formattedBookings)
+    )
   } catch (error) {
     console.error("Error fetching bookings:", error)
-    return NextResponse.json({ message: "Failed to fetch bookings" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch bookings" }, { status: 500 })
   }
-}
+})
 
-export async function POST(request: Request) {
+export const POST = withPermission("bookings:create")(async (req: NextRequest) => {
   try {
-    const data = await request.json()
-    const { client, services, couponId, ...bookingData } = data
-
-    const newBooking = await prisma.booking.create({
+    const body = await req.json()
+    const newBooking = await prisma.v2_bookings.create({
       data: {
-        ...bookingData,
-        totalAmount: Number.parseFloat(bookingData.totalAmount),
-        discountAmount: bookingData.discountAmount ? Number.parseFloat(bookingData.discountAmount) : null,
-        finalAmount: Number.parseFloat(bookingData.finalAmount),
-        client: {
-          connect: { id: client.id },
-        },
+        clientId: body.clientId,
+        bookingDate: new Date(body.bookingDate),
+        status: body.status,
+        amount: Number.parseFloat(body.amount),
+        discountAmount: Number.parseFloat(body.discountAmount),
+        finalAmount: Number.parseFloat(body.finalAmount),
+        paymentMethod: body.paymentMethod,
+        paymentStatus: body.paymentStatus,
+        couponId: body.couponId || null,
         services: {
-          connect: services.map((service: { id: string }) => ({
-            id: service.id,
-          })),
+          connect: body.serviceIds.map((id: string) => ({ id })),
         },
-        ...(couponId && { coupon: { connect: { id: couponId } } }),
-      },
-      include: {
-        client: true,
-        services: true,
-        coupon: true,
-        payment: true,
       },
     })
-
-    const formattedBooking = {
-      ...newBooking,
-      totalAmount: newBooking.totalAmount.toNumber(),
-      discountAmount: newBooking.discountAmount?.toNumber(),
-      finalAmount: newBooking.finalAmount.toNumber(),
-      services: newBooking.services.map((service) => ({
-        ...service,
-        price: service.price.toNumber(),
-      })),
-      coupon: newBooking.coupon
-        ? {
-            ...newBooking.coupon,
-            discountValue: newBooking.coupon.discountValue.toNumber(),
-            minimumAmount: newBooking.coupon.minimumAmount?.toNumber(),
-          }
-        : null,
-      payment: newBooking.payment
-        ? {
-            ...newBooking.payment,
-            amount: newBooking.payment.amount.toNumber(),
-          }
-        : null,
-    }
-
-    return NextResponse.json(formattedBooking, { status: 201 })
+    return NextResponse.json(newBooking, { status: 201 })
   } catch (error) {
     console.error("Error creating booking:", error)
-    return NextResponse.json({ message: "Failed to create booking" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to create booking" }, { status: 500 })
   }
-}
+})

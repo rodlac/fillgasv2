@@ -7,40 +7,48 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/components/ui/use-toast"
+import { Switch } from "@/components/ui/switch"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { CalendarIcon } from "lucide-react"
+import { format } from "date-fns"
+import { toast } from "@/components/ui/use-toast"
 
 interface Coupon {
-  id: string
+  id?: string
   code: string
-  discountType: "PERCENTAGE" | "FIXED"
+  name: string
+  discountType: "percentage" | "fixed"
   discountValue: number
-  minimumAmount?: number | null
-  usageLimit?: number | null
-  usedCount: number
-  expirationDate?: string | null
+  minimumAmount: number | null
+  validFrom: string
+  validUntil: string
+  maxUsage: number | null
+  maxUsagePerUser: number | null
   isActive: boolean
 }
 
 interface CouponModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: () => void
   coupon: Coupon | null
 }
 
-export function CouponModal({ isOpen, onClose, onSave, coupon }: CouponModalProps) {
-  const [formData, setFormData] = useState<Omit<Coupon, "id" | "usedCount">>({
+export function CouponModal({ isOpen, onClose, coupon }: CouponModalProps) {
+  const [formData, setFormData] = useState<Coupon>({
     code: "",
-    discountType: "FIXED",
+    name: "",
+    discountType: "fixed",
     discountValue: 0,
     minimumAmount: null,
-    usageLimit: null,
-    expirationDate: null,
+    validFrom: new Date().toISOString(),
+    validUntil: new Date().toISOString(),
+    maxUsage: null,
+    maxUsagePerUser: null,
     isActive: true,
   })
-  const { toast } = useToast()
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (coupon) {
@@ -48,43 +56,62 @@ export function CouponModal({ isOpen, onClose, onSave, coupon }: CouponModalProp
         ...coupon,
         discountValue: Number(coupon.discountValue),
         minimumAmount: coupon.minimumAmount ? Number(coupon.minimumAmount) : null,
-        usageLimit: coupon.usageLimit || null,
-        expirationDate: coupon.expirationDate ? new Date(coupon.expirationDate).toISOString().split("T")[0] : null,
+        validFrom: new Date(coupon.validFrom).toISOString(),
+        validUntil: new Date(coupon.validUntil).toISOString(),
       })
     } else {
       setFormData({
         code: "",
-        discountType: "FIXED",
+        name: "",
+        discountType: "fixed",
         discountValue: 0,
         minimumAmount: null,
-        usageLimit: null,
-        expirationDate: null,
+        validFrom: new Date().toISOString(),
+        validUntil: new Date().toISOString(),
+        maxUsage: null,
+        maxUsagePerUser: null,
         isActive: true,
       })
     }
-  }, [coupon, isOpen])
+  }, [coupon])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target
     setFormData((prev) => ({
       ...prev,
-      [id]:
-        id === "discountValue" || id === "minimumAmount" || id === "usageLimit"
-          ? Number.parseFloat(value) || (value === "" ? null : 0)
-          : value,
+      [id]: ["discountValue", "minimumAmount", "maxUsage", "maxUsagePerUser"].includes(id)
+        ? Number.parseFloat(value) ||
+          (id === "minimumAmount" || id === "maxUsage" || id === "maxUsagePerUser" ? null : 0)
+        : value,
     }))
   }
 
-  const handleSelectChange = (value: "PERCENTAGE" | "FIXED") => {
-    setFormData((prev) => ({ ...prev, discountType: value }))
+  const handleSelectChange = (value: "percentage" | "fixed") => {
+    setFormData((prev) => ({
+      ...prev,
+      discountType: value,
+    }))
   }
 
   const handleSwitchChange = (checked: boolean) => {
-    setFormData((prev) => ({ ...prev, isActive: checked }))
+    setFormData((prev) => ({
+      ...prev,
+      isActive: checked,
+    }))
+  }
+
+  const handleDateChange = (date: Date | undefined, field: "validFrom" | "validUntil") => {
+    if (date) {
+      setFormData((prev) => ({
+        ...prev,
+        [field]: date.toISOString(),
+      }))
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setLoading(true)
     try {
       const method = coupon ? "PUT" : "POST"
       const url = coupon ? `/api/coupons/${coupon.id}` : "/api/coupons"
@@ -97,27 +124,30 @@ export function CouponModal({ isOpen, onClose, onSave, coupon }: CouponModalProp
       })
 
       if (!res.ok) {
-        throw new Error(`Failed to ${coupon ? "update" : "create"} coupon`)
+        const errorData = await res.json()
+        throw new Error(errorData.error || `HTTP error! status: ${res.status}`)
       }
 
       toast({
-        title: "Sucesso!",
+        title: "Sucesso",
         description: `Cupom ${coupon ? "atualizado" : "criado"} com sucesso.`,
       })
-      onSave()
-    } catch (error) {
-      console.error("Error saving coupon:", error)
+      onClose()
+    } catch (error: any) {
+      console.error("Failed to save coupon:", error)
       toast({
         title: "Erro",
-        description: `Falha ao ${coupon ? "atualizar" : "criar"} cupom.`,
+        description: `Falha ao ${coupon ? "atualizar" : "criar"} cupom: ${error.message}`,
         variant: "destructive",
       })
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>{coupon ? "Editar Cupom" : "Novo Cupom"}</DialogTitle>
         </DialogHeader>
@@ -130,6 +160,12 @@ export function CouponModal({ isOpen, onClose, onSave, coupon }: CouponModalProp
               <Input id="code" value={formData.code} onChange={handleChange} className="col-span-3" required />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Nome
+              </Label>
+              <Input id="name" value={formData.name} onChange={handleChange} className="col-span-3" required />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="discountType" className="text-right">
                 Tipo de Desconto
               </Label>
@@ -138,8 +174,8 @@ export function CouponModal({ isOpen, onClose, onSave, coupon }: CouponModalProp
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIXED">Fixo</SelectItem>
-                  <SelectItem value="PERCENTAGE">Percentual</SelectItem>
+                  <SelectItem value="fixed">Valor Fixo</SelectItem>
+                  <SelectItem value="percentage">Percentual</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -168,31 +204,81 @@ export function CouponModal({ isOpen, onClose, onSave, coupon }: CouponModalProp
                 value={formData.minimumAmount || ""}
                 onChange={handleChange}
                 className="col-span-3"
+                placeholder="Opcional"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="usageLimit" className="text-right">
-                Limite de Uso
+              <Label htmlFor="validFrom" className="text-right">
+                Válido De
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant={"outline"} className="col-span-3 justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formData.validFrom ? format(new Date(formData.validFrom), "PPP") : <span>Selecione uma data</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={new Date(formData.validFrom)}
+                    onSelect={(date) => handleDateChange(date, "validFrom")}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="validUntil" className="text-right">
+                Válido Até
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant={"outline"} className="col-span-3 justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formData.validUntil ? (
+                      format(new Date(formData.validUntil), "PPP")
+                    ) : (
+                      <span>Selecione uma data</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={new Date(formData.validUntil)}
+                    onSelect={(date) => handleDateChange(date, "validUntil")}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="maxUsage" className="text-right">
+                Uso Máximo
               </Label>
               <Input
-                id="usageLimit"
+                id="maxUsage"
                 type="number"
                 step="1"
-                value={formData.usageLimit || ""}
+                value={formData.maxUsage || ""}
                 onChange={handleChange}
                 className="col-span-3"
+                placeholder="Opcional"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="expirationDate" className="text-right">
-                Data de Expiração
+              <Label htmlFor="maxUsagePerUser" className="text-right">
+                Uso Máximo por Cliente
               </Label>
               <Input
-                id="expirationDate"
-                type="date"
-                value={formData.expirationDate || ""}
+                id="maxUsagePerUser"
+                type="number"
+                step="1"
+                value={formData.maxUsagePerUser || ""}
                 onChange={handleChange}
                 className="col-span-3"
+                placeholder="Opcional"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -208,7 +294,9 @@ export function CouponModal({ isOpen, onClose, onSave, coupon }: CouponModalProp
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit">Salvar</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Salvando..." : "Salvar"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

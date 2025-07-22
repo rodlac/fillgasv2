@@ -4,45 +4,51 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { supabase } from "@/lib/supabase-browser"
-import { useToast } from "@/components/ui/use-toast"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { toast } from "@/components/ui/use-toast"
+import { Loader2 } from "lucide-react"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const { toast } = useToast()
+  const supabase = createSupabaseBrowserClient()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (error) {
-        throw error
+        console.error("Login error:", error.message)
+        toast({
+          title: "Erro de Login",
+          description: error.message,
+          variant: "destructive",
+        })
+      } else if (data.user) {
+        toast({
+          title: "Login bem-sucedido!",
+          description: "Redirecionando para o dashboard...",
+        })
+        // Add a small delay to ensure session is established
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        router.push("/dashboard")
       }
-
+    } catch (error) {
+      console.error("Unexpected login error:", error)
       toast({
-        title: "Login bem-sucedido!",
-        description: "Redirecionando para o dashboard...",
-      })
-
-      // Add a small delay to ensure session is established
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      router.push("/dashboard")
-    } catch (error: any) {
-      toast({
-        title: "Erro de Login",
-        description: error.message || "Ocorreu um erro inesperado.",
+        title: "Erro Inesperado",
+        description: "Ocorreu um erro inesperado durante o login.",
         variant: "destructive",
       })
     } finally {
@@ -54,35 +60,41 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold">Login</CardTitle>
-          <p className="text-gray-500">Acesse sua conta FillGás</p>
+          <CardTitle className="text-3xl font-bold">FillGás</CardTitle>
+          <CardDescription>Faça login para acessar o painel de controle.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
+          <form onSubmit={handleLogin} className="grid gap-4">
+            <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="seu@email.com"
+                placeholder="m@example.com"
+                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
               />
             </div>
-            <div>
+            <div className="grid gap-2">
               <Label htmlFor="password">Senha</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="********"
+                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Entrando..." : "Entrar"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Entrando...
+                </>
+              ) : (
+                "Entrar"
+              )}
             </Button>
           </form>
         </CardContent>

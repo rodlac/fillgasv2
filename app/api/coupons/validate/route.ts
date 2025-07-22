@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { withPermission } from "@/lib/auth"
+import prisma from "@/lib/prisma" // Changed to default import
+import { withPermission } from "@/lib/auth" // Named import
 
 export const POST = withPermission("bookings:create")(async (req: NextRequest) => {
   const body = await req.json()
@@ -27,7 +27,7 @@ export const POST = withPermission("bookings:create")(async (req: NextRequest) =
     if (coupon.minimumAmount && orderAmount < Number(coupon.minimumAmount)) {
       return Response.json({
         isValid: false,
-        reason: `Valor mínimo de R$ ${coupon.minimumAmount} não atingido`,
+        reason: `Valor mínimo de R$ ${Number(coupon.minimumAmount).toFixed(2)} não atingido`,
       })
     }
 
@@ -70,6 +70,7 @@ export const POST = withPermission("bookings:create")(async (req: NextRequest) =
       },
     })
   } catch (error) {
+    console.error("Error validating coupon:", error)
     return Response.json({ error: "Erro ao validar cupom" }, { status: 500 })
   }
 })

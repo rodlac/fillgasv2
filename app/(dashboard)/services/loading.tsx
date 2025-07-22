@@ -1,3 +1,7 @@
 export default function Loading() {
-  return null
+  return (
+    <div className="flex justify-center items-center h-full">
+      <p>Carregando serviços...</p>
+    </div>
+  )
 }

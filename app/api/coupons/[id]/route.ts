@@ -1,59 +1,63 @@
-import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
+import { type NextRequest, NextResponse } from "next/server"
+import prisma from "@/lib/prisma" // Changed to default import
+import { withPermission } from "@/lib/auth"
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export const GET = withPermission("coupons:read")(async (req: NextRequest, { params }: { params: { id: string } }) => {
   try {
-    const coupon = await prisma.coupon.findUnique({
+    const coupon = await prisma.v2_coupons.findUnique({
       where: { id: params.id },
     })
     if (!coupon) {
-      return NextResponse.json({ message: "Coupon not found" }, { status: 404 })
+      return NextResponse.json({ error: "Coupon not found" }, { status: 404 })
     }
-    // Ensure discountValue and minimumAmount are converted to numbers for frontend
-    const formattedCoupon = {
+    return NextResponse.json({
       ...coupon,
-      discountValue: coupon.discountValue.toNumber(),
-      minimumAmount: coupon.minimumAmount?.toNumber(),
-    }
-    return NextResponse.json(formattedCoupon)
+      discountValue: Number(coupon.discountValue),
+      minimumAmount: coupon.minimumAmount ? Number(coupon.minimumAmount) : null,
+    })
   } catch (error) {
     console.error("Error fetching coupon:", error)
-    return NextResponse.json({ message: "Failed to fetch coupon" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch coupon" }, { status: 500 })
   }
-}
+})
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const data = await request.json()
-    const updatedCoupon = await prisma.coupon.update({
-      where: { id: params.id },
-      data: {
-        ...data,
-        discountValue: Number.parseFloat(data.discountValue),
-        minimumAmount: data.minimumAmount ? Number.parseFloat(data.minimumAmount) : null,
-      },
-    })
-    // Convert back to number for response
-    const formattedCoupon = {
-      ...updatedCoupon,
-      discountValue: updatedCoupon.discountValue.toNumber(),
-      minimumAmount: updatedCoupon.minimumAmount?.toNumber(),
+export const PUT = withPermission("coupons:update")(
+  async (req: NextRequest, { params }: { params: { id: string } }) => {
+    try {
+      const body = await req.json()
+      const updatedCoupon = await prisma.v2_coupons.update({
+        where: { id: params.id },
+        data: {
+          code: body.code,
+          name: body.name,
+          discountType: body.discountType,
+          discountValue: Number.parseFloat(body.discountValue),
+          minimumAmount: body.minimumAmount ? Number.parseFloat(body.minimumAmount) : null,
+          validFrom: new Date(body.validFrom),
+          validUntil: new Date(body.validUntil),
+          maxUsage: body.maxUsage ? Number.parseInt(body.maxUsage) : null,
+          maxUsagePerUser: body.maxUsagePerUser ? Number.parseInt(body.maxUsagePerUser) : null,
+          isActive: body.isActive,
+        },
+      })
+      return NextResponse.json(updatedCoupon)
+    } catch (error) {
+      console.error("Error updating coupon:", error)
+      return NextResponse.json({ error: "Failed to update coupon" }, { status: 500 })
     }
-    return NextResponse.json(formattedCoupon)
-  } catch (error) {
-    console.error("Error updating coupon:", error)
-    return NextResponse.json({ message: "Failed to update coupon" }, { status: 500 })
-  }
-}
+  },
+)
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  try {
-    await prisma.coupon.delete({
-      where: { id: params.id },
-    })
-    return NextResponse.json({ message: "Coupon deleted" }, { status: 204 })
-  } catch (error) {
-    console.error("Error deleting coupon:", error)
-    return NextResponse.json({ message: "Failed to delete coupon" }, { status: 500 })
-  }
-}
+export const DELETE = withPermission("coupons:delete")(
+  async (req: NextRequest, { params }: { params: { id: string } }) => {
+    try {
+      await prisma.v2_coupons.delete({
+        where: { id: params.id },
+      })
+      return new Response(null, { status: 204 })
+    } catch (error) {
+      console.error("Error deleting coupon:", error)
+      return NextResponse.json({ error: "Failed to delete coupon" }, { status: 500 })
+    }
+  },
+)

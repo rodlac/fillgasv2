@@ -2,62 +2,76 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { cn } from "@/lib/utils"
-import { Calendar, Users, Package, Ticket, CreditCard, FileCheck, Settings, Key, LayoutDashboard } from "lucide-react"
+import {
+  HomeIcon,
+  UsersIcon,
+  ShoppingCartIcon,
+  TagIcon,
+  DollarSignIcon,
+  ReceiptIcon,
+  KeyIcon,
+  SettingsIcon,
+  XIcon,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import Image from "next/image"
 
-const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Agendamentos", href: "/bookings", icon: Calendar },
-  { name: "Clientes", href: "/clients", icon: Users },
-  { name: "Serviços", href: "/services", icon: Package },
-  { name: "Cupons", href: "/coupons", icon: Ticket },
-  { name: "Pagamentos", href: "/payments", icon: CreditCard },
-  { name: "Verificação", href: "/payment-verification", icon: FileCheck },
-  { name: "Usuários", href: "/users", icon: Users },
-  { name: "API Keys", href: "/api-keys", icon: Key },
-  { name: "Configurações", href: "/settings", icon: Settings },
-]
+interface SidebarProps {
+  onClose?: () => void // Optional prop for mobile close button
+}
 
-export function Sidebar() {
+export function Sidebar({ onClose }: SidebarProps) {
   const pathname = usePathname()
 
+  const navItems = [
+    { href: "/dashboard", icon: HomeIcon, label: "Dashboard" },
+    { href: "/clients", icon: UsersIcon, label: "Clientes" },
+    { href: "/services", icon: ShoppingCartIcon, label: "Serviços" },
+    { href: "/bookings", icon: TagIcon, label: "Agendamentos" },
+    { href: "/coupons", icon: DollarSignIcon, label: "Cupons" },
+    { href: "/payments", icon: ReceiptIcon, label: "Pagamentos" },
+    { href: "/payment-verification", icon: ReceiptIcon, label: "Verificação Pag." }, // Placeholder for future page
+    { href: "/users", icon: UsersIcon, label: "Usuários" }, // Placeholder for future page
+    { href: "/api-keys", icon: KeyIcon, label: "Chaves API" }, // Placeholder for future page
+    { href: "/settings", icon: SettingsIcon, label: "Configurações" }, // Placeholder for future page
+  ]
+
   return (
-    <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
-      <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white px-6 pb-4 shadow-sm">
-        <div className="flex h-16 shrink-0 items-center">
-          <h1 className="text-xl font-bold text-primary">FillGás</h1>
-        </div>
-        <nav className="flex flex-1 flex-col">
-          <ul role="list" className="flex flex-1 flex-col gap-y-7">
-            <li>
-              <ul role="list" className="-mx-2 space-y-1">
-                {navigation.map((item) => (
-                  <li key={item.name}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        pathname === item.href
-                          ? "bg-gray-50 text-primary"
-                          : "text-gray-700 hover:text-primary hover:bg-gray-50",
-                        "group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold",
-                      )}
-                    >
-                      <item.icon
-                        className={cn(
-                          pathname === item.href ? "text-primary" : "text-gray-400 group-hover:text-primary",
-                          "h-6 w-6 shrink-0",
-                        )}
-                        aria-hidden="true"
-                      />
-                      {item.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          </ul>
-        </nav>
+    <div className="flex h-full flex-col border-r bg-white">
+      <div className="flex h-16 items-center justify-between px-6">
+        <Link className="flex items-center gap-2 font-semibold" href="/dashboard">
+          <Image src="/placeholder-logo.svg" alt="FillGás Logo" width={32} height={32} />
+          <span className="text-lg">FillGás</span>
+        </Link>
+        {onClose && (
+          <Button variant="ghost" size="icon" className="lg:hidden" onClick={onClose}>
+            <XIcon className="h-6 w-6" />
+            <span className="sr-only">Close sidebar</span>
+          </Button>
+        )}
       </div>
+      <nav className="flex-1 overflow-auto py-4">
+        <ul className="grid items-start gap-2 px-4 text-sm font-medium">
+          {navItems.map((item) => {
+            const Icon = item.icon
+            const isActive = pathname === item.href
+            return (
+              <li key={item.href}>
+                <Link
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:text-gray-900 ${
+                    isActive ? "bg-gray-100 text-gray-900" : "text-gray-500"
+                  }`}
+                  href={item.href}
+                  onClick={onClose} // Close sidebar on mobile when item is clicked
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      </nav>
     </div>
   )
 }

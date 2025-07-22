@@ -7,32 +7,32 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "@/components/ui/use-toast"
 
 interface Service {
-  id: string
+  id?: string
   name: string
+  description: string
   price: number
-  description?: string
   isActive: boolean
 }
 
 interface ServiceModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: () => void
   service: Service | null
 }
 
-export function ServiceModal({ isOpen, onClose, onSave, service }: ServiceModalProps) {
-  const [formData, setFormData] = useState<Omit<Service, "id">>({
+export function ServiceModal({ isOpen, onClose, service }: ServiceModalProps) {
+  const [formData, setFormData] = useState<Service>({
     name: "",
-    price: 0,
     description: "",
+    price: 0,
     isActive: true,
   })
-  const { toast } = useToast()
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (service) {
@@ -43,24 +43,31 @@ export function ServiceModal({ isOpen, onClose, onSave, service }: ServiceModalP
     } else {
       setFormData({
         name: "",
-        price: 0,
         description: "",
+        price: 0,
         isActive: true,
       })
     }
-  }, [service, isOpen])
+  }, [service])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target
-    setFormData((prev) => ({ ...prev, [id]: id === "price" ? Number.parseFloat(value) || 0 : value }))
+    setFormData((prev) => ({
+      ...prev,
+      [id]: id === "price" ? Number.parseFloat(value) || 0 : value,
+    }))
   }
 
   const handleSwitchChange = (checked: boolean) => {
-    setFormData((prev) => ({ ...prev, isActive: checked }))
+    setFormData((prev) => ({
+      ...prev,
+      isActive: checked,
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setLoading(true)
     try {
       const method = service ? "PUT" : "POST"
       const url = service ? `/api/services/${service.id}` : "/api/services"
@@ -73,27 +80,30 @@ export function ServiceModal({ isOpen, onClose, onSave, service }: ServiceModalP
       })
 
       if (!res.ok) {
-        throw new Error(`Failed to ${service ? "update" : "create"} service`)
+        const errorData = await res.json()
+        throw new Error(errorData.error || `HTTP error! status: ${res.status}`)
       }
 
       toast({
-        title: "Sucesso!",
+        title: "Sucesso",
         description: `Serviço ${service ? "atualizado" : "criado"} com sucesso.`,
       })
-      onSave()
-    } catch (error) {
-      console.error("Error saving service:", error)
+      onClose()
+    } catch (error: any) {
+      console.error("Failed to save service:", error)
       toast({
         title: "Erro",
-        description: `Falha ao ${service ? "atualizar" : "criar"} serviço.`,
+        description: `Falha ao ${service ? "atualizar" : "criar"} serviço: ${error.message}`,
         variant: "destructive",
       })
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>{service ? "Editar Serviço" : "Novo Serviço"}</DialogTitle>
         </DialogHeader>
@@ -104,6 +114,12 @@ export function ServiceModal({ isOpen, onClose, onSave, service }: ServiceModalP
                 Nome
               </Label>
               <Input id="name" value={formData.name} onChange={handleChange} className="col-span-3" required />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="description" className="text-right">
+                Descrição
+              </Label>
+              <Textarea id="description" value={formData.description} onChange={handleChange} className="col-span-3" />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="price" className="text-right">
@@ -120,12 +136,6 @@ export function ServiceModal({ isOpen, onClose, onSave, service }: ServiceModalP
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="description" className="text-right">
-                Descrição
-              </Label>
-              <Input id="description" value={formData.description} onChange={handleChange} className="col-span-3" />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="isActive" className="text-right">
                 Ativo
               </Label>
@@ -138,7 +148,9 @@ export function ServiceModal({ isOpen, onClose, onSave, service }: ServiceModalP
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit">Salvar</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Salvando..." : "Salvar"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

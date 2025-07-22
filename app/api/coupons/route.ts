@@ -1,41 +1,45 @@
-import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
+import { type NextRequest, NextResponse } from "next/server"
+import prisma from "@/lib/prisma" // Changed to default import
+import { withPermission } from "@/lib/auth"
 
-export async function GET() {
+export const GET = withPermission("coupons:read")(async (req: NextRequest) => {
   try {
-    const coupons = await prisma.coupon.findMany()
-    // Ensure discountValue and minimumAmount are converted to numbers for frontend
-    const formattedCoupons = coupons.map((coupon) => ({
-      ...coupon,
-      discountValue: coupon.discountValue.toNumber(),
-      minimumAmount: coupon.minimumAmount?.toNumber(),
-    }))
-    return NextResponse.json(formattedCoupons)
+    const coupons = await prisma.v2_coupons.findMany({
+      orderBy: { createdAt: "desc" },
+    })
+    return NextResponse.json(
+      coupons.map((coupon) => ({
+        ...coupon,
+        discountValue: Number(coupon.discountValue),
+        minimumAmount: coupon.minimumAmount ? Number(coupon.minimumAmount) : null,
+      })),
+    )
   } catch (error) {
     console.error("Error fetching coupons:", error)
-    return NextResponse.json({ message: "Failed to fetch coupons" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch coupons" }, { status: 500 })
   }
-}
+})
 
-export async function POST(request: Request) {
+export const POST = withPermission("coupons:create")(async (req: NextRequest) => {
   try {
-    const data = await request.json()
-    const newCoupon = await prisma.coupon.create({
+    const body = await req.json()
+    const newCoupon = await prisma.v2_coupons.create({
       data: {
-        ...data,
-        discountValue: Number.parseFloat(data.discountValue),
-        minimumAmount: data.minimumAmount ? Number.parseFloat(data.minimumAmount) : null,
+        code: body.code,
+        name: body.name,
+        discountType: body.discountType,
+        discountValue: Number.parseFloat(body.discountValue),
+        minimumAmount: body.minimumAmount ? Number.parseFloat(body.minimumAmount) : null,
+        validFrom: new Date(body.validFrom),
+        validUntil: new Date(body.validUntil),
+        maxUsage: body.maxUsage ? Number.parseInt(body.maxUsage) : null,
+        maxUsagePerUser: body.maxUsagePerUser ? Number.parseInt(body.maxUsagePerUser) : null,
+        isActive: body.isActive,
       },
     })
-    // Convert back to number for response
-    const formattedCoupon = {
-      ...newCoupon,
-      discountValue: newCoupon.discountValue.toNumber(),
-      minimumAmount: newCoupon.minimumAmount?.toNumber(),
-    }
-    return NextResponse.json(formattedCoupon, { status: 201 })
+    return NextResponse.json(newCoupon, { status: 201 })
   } catch (error) {
     console.error("Error creating coupon:", error)
-    return NextResponse.json({ message: "Failed to create coupon" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to create coupon" }, { status: 500 })
   }
-}
+})

@@ -1,9 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Calendar, Users, DollarSign, Package } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Users, DollarSign, Package, CreditCard } from "lucide-react"
 
 interface DashboardStats {
   todayBookings: number
@@ -47,100 +46,92 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Visão geral do sistema</p>
-      </div>
+    <div className="p-6 grid gap-6">
+      <h1 className="text-2xl font-semibold mb-4">Dashboard</h1>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Agendamentos Hoje</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
+            <DollarSign className="h-4 w-4 text-gray-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.todayBookings}</div>
-            <p className="text-xs text-muted-foreground">+2 desde ontem</p>
+            <div className="text-2xl font-bold">R$ 45.231,89</div>
+            <p className="text-xs text-gray-500">+20.1% do mês passado</p>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pagamentos Pendentes</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.pendingPayments}</div>
-            <p className="text-xs text-muted-foreground">Aguardando confirmação</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Receita Semanal</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">R$ {stats.weeklyRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">+12% em relação à semana passada</p>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Clientes Ativos</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-4 w-4 text-gray-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.activeClients}</div>
-            <p className="text-xs text-muted-foreground">+8 novos este mês</p>
+            <div className="text-2xl font-bold">+2350</div>
+            <p className="text-xs text-gray-500">+180.1% do mês passado</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Agendamentos Pendentes</CardTitle>
+            <Package className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">12</div>
+            <p className="text-xs text-gray-500">+19% do mês passado</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pagamentos Pendentes</CardTitle>
+            <CreditCard className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">R$ 5.789,00</div>
+            <p className="text-xs text-gray-500">+50% do mês passado</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
+      {/* Add more dashboard sections here, e.g., recent activities, charts */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Ações Rápidas</CardTitle>
-            <CardDescription>Acesse rapidamente as funcionalidades mais usadas</CardDescription>
+            <CardTitle>Visão Geral da Receita</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Button className="w-full justify-start">
-              <Calendar className="mr-2 h-4 w-4" />
-              Novo Agendamento
-            </Button>
-            <Button variant="outline" className="w-full justify-start bg-transparent">
-              <Users className="mr-2 h-4 w-4" />
-              Cadastrar Cliente
-            </Button>
-            <Button variant="outline" className="w-full justify-start bg-transparent">
-              <Package className="mr-2 h-4 w-4" />
-              Gerenciar Serviços
-            </Button>
+          <CardContent className="pl-2">
+            {/* Placeholder for a chart */}
+            <div className="h-[300px] flex items-center justify-center text-gray-400">
+              Gráfico de Receita (em breve)
+            </div>
           </CardContent>
         </Card>
-
-        <Card>
+        <Card className="col-span-3">
           <CardHeader>
-            <CardTitle>Entregas de Hoje</CardTitle>
-            <CardDescription>Agendamentos para entrega hoje</CardDescription>
+            <CardTitle>Atividades Recentes</CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Placeholder for recent activities list */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">João Silva</p>
-                  <p className="text-sm text-gray-600">Rua das Flores, 123</p>
+              <div className="flex items-center">
+                <div className="ml-4 space-y-1">
+                  <p className="text-sm font-medium leading-none">Novo agendamento #1234</p>
+                  <p className="text-sm text-gray-500">Cliente: João Silva</p>
                 </div>
-                <Button size="sm">Confirmar</Button>
+                <div className="ml-auto font-medium">R$ 150,00</div>
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Maria Santos</p>
-                  <p className="text-sm text-gray-600">Av. Principal, 456</p>
+              <div className="flex items-center">
+                <div className="ml-4 space-y-1">
+                  <p className="text-sm font-medium leading-none">Pagamento recebido #5678</p>
+                  <p className="text-sm text-gray-500">Cliente: Maria Souza</p>
                 </div>
-                <Button size="sm">Confirmar</Button>
+                <div className="ml-auto font-medium">R$ 200,00</div>
+              </div>
+              <div className="flex items-center">
+                <div className="ml-4 space-y-1">
+                  <p className="text-sm font-medium leading-none">Novo cliente cadastrado</p>
+                  <p className="text-sm text-gray-500">Nome: Pedro Santos</p>
+                </div>
+                <div className="ml-auto font-medium"></div>
               </div>
             </div>
           </CardContent>

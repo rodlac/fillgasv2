@@ -8,8 +8,8 @@ import { Toaster } from "@/components/ui/toaster"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "FillGás - Sistema de Agendamento",
-  description: "Sistema de agendamento e gestão de entregas de cilindros",
+  title: "FillGás - Gestão de Entregas de Gás",
+  description: "Sistema de gestão para empresas de entrega de gás.",
     generator: 'v0.dev'
 }
 
@@ -19,9 +19,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           {children}
           <Toaster />
         </ThemeProvider>

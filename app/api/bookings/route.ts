@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma" // Changed to named import
+import { prisma } from "@/lib/prisma"
 import { withPermission } from "@/lib/auth"
 
 export const GET = withPermission("bookings:read")(async (req: NextRequest) => {
@@ -15,7 +15,9 @@ export const GET = withPermission("bookings:read")(async (req: NextRequest) => {
         coupon: true,
         payments: true,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: {
+        deliveryDate: "desc",
+      },
     })
 
     const formattedBookings = bookings.map((booking) => ({
@@ -52,31 +54,16 @@ export const GET = withPermission("bookings:read")(async (req: NextRequest) => {
 export const POST = withPermission("bookings:create")(async (req: NextRequest) => {
   try {
     const body = await req.json()
-    console.log("Received booking data:", body)
+    console.log("Creating booking with data:", body)
 
-    // Validate required fields
-    if (
-      !body.clientId ||
-      !body.deliveryAddress ||
-      !body.deliveryDate ||
-      !body.serviceIds ||
-      body.serviceIds.length === 0
-    ) {
-      return NextResponse.json(
-        { error: "Missing required fields: clientId, deliveryAddress, deliveryDate, and serviceIds are required" },
-        { status: 400 },
-      )
-    }
-
-    // Create the booking with services
     const newBooking = await prisma.v2_bookings.create({
       data: {
         clientId: body.clientId,
         deliveryAddress: body.deliveryAddress,
         deliveryDate: new Date(body.deliveryDate),
-        status: body.status || "scheduled",
-        paymentStatus: body.paymentStatus || "pending",
-        paymentMethod: body.paymentMethod || "pix",
+        status: body.status,
+        paymentStatus: body.paymentStatus,
+        paymentMethod: body.paymentMethod,
         amount: Number.parseFloat(body.amount.toString()),
         discountAmount: Number.parseFloat((body.discountAmount || 0).toString()),
         couponId: body.couponId || null,
@@ -84,7 +71,7 @@ export const POST = withPermission("bookings:create")(async (req: NextRequest) =
         bookingServices: {
           create: body.serviceIds.map((serviceId: string) => ({
             serviceId: serviceId,
-            quantity: 1, // Default quantity
+            quantity: 1, // Assuming quantity is always 1 for now
           })),
         },
       },

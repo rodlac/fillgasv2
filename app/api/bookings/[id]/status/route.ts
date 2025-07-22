@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma" // Changed to named import
+import { prisma } from "@/lib/prisma"
 import { withPermission } from "@/lib/auth"
 
 export const PUT = withPermission("bookings:update")(

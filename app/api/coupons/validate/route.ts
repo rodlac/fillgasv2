@@ -1,80 +1,54 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma" // Changed to named import
+import { prisma } from "@/lib/prisma"
 import { withPermission } from "@/lib/auth"
 
-export const POST = withPermission("coupons:validate")(async (req: NextRequest) => {
+export const POST = withPermission("coupons:read")(async (req: NextRequest) => {
   try {
-    const { code, clientId, orderAmount } = await req.json()
+    const { code, amount } = await req.json()
 
-    if (!code || !clientId || orderAmount === undefined) {
+    if (!code || !amount) {
+      return NextResponse.json({ error: "Coupon code and amount are required" }, { status: 400 })
+    }
+
+    const coupon = await prisma.v2_coupons.findUnique({
+      where: { code },
+    })
+
+    if (!coupon || coupon.isActive === false) {
+      return NextResponse.json({ isValid: false, message: "Invalid or inactive coupon" }, { status: 404 })
+    }
+
+    const now = new Date()
+    if (coupon.validFrom && now < coupon.validFrom) {
+      return NextResponse.json({ isValid: false, message: "Coupon not yet active" }, { status: 400 })
+    }
+    if (coupon.validUntil && now > coupon.validUntil) {
+      return NextResponse.json({ isValid: false, message: "Coupon expired" }, { status: 400 })
+    }
+
+    if (coupon.minimumAmount && Number(amount) < Number(coupon.minimumAmount)) {
       return NextResponse.json(
-        { isValid: false, reason: "Código do cupom, cliente e valor do pedido são obrigatórios." },
+        { isValid: false, message: `Minimum amount of R$${Number(coupon.minimumAmount).toFixed(2)} not met` },
         { status: 400 },
       )
     }
 
-    // Find the coupon
-    const coupon = await prisma.v2_coupons.findFirst({
-      where: {
-        code: code,
-        isActive: true,
-        OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }],
-      },
-    })
-
-    if (!coupon) {
-      return NextResponse.json({
-        isValid: false,
-        reason: "Cupom não encontrado ou expirado.",
-      })
-    }
-
-    // Check if coupon has usage limit
-    if (coupon.usageLimit !== null) {
-      const usageCount = await prisma.v2_bookings.count({
-        where: {
-          couponId: coupon.id,
-        },
-      })
-
-      if (usageCount >= coupon.usageLimit) {
-        return NextResponse.json({
-          isValid: false,
-          reason: "Cupom atingiu o limite de uso.",
-        })
-      }
-    }
-
-    // Check minimum amount
-    if (coupon.minimumAmount && orderAmount < Number(coupon.minimumAmount)) {
-      return NextResponse.json({
-        isValid: false,
-        reason: `Valor mínimo do pedido deve ser R$ ${Number(coupon.minimumAmount).toFixed(2)}.`,
-      })
-    }
-
-    // Calculate discount
-    let discountAmount = 0
-    if (coupon.discountType === "percentage") {
-      discountAmount = orderAmount * (Number(coupon.discountValue) / 100)
-    } else {
-      discountAmount = Number(coupon.discountValue)
-    }
-
-    // Ensure discount doesn't exceed order amount
-    discountAmount = Math.min(discountAmount, orderAmount)
+    const discountAmount = Number(coupon.discountValue)
+    const finalAmount = Number(amount) - discountAmount
 
     return NextResponse.json({
       isValid: true,
-      discountAmount,
       coupon: {
-        id: coupon.id,
-        code: coupon.code,
-        name: coupon.name,
+        ...coupon,
+        discountValue: Number(coupon.discountValue),
+        minimumAmount: coupon.minimumAmount ? Number(coupon.minimumAmount) : null,
       },
+      discountAmount,
+      finalAmount: Math.max(0, finalAmount), // Ensure final amount is not negative
+      message: "Coupon applied successfully!",
     })
   } catch (error) {
     console.error("Error validating coupon:", error)
-    return NextResponse.json({ isValid: false, reason: "Erro interno do servidor." }, { status: 500 })
+    return NextResponse.json({ error: "Failed to validate coupon" }, { status: 500 })
   }
 })

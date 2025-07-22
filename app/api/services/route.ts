@@ -1,36 +1,42 @@
-import type { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { withPermission } from "@/lib/auth"
+import { NextResponse } from "next/server"
 
-export const GET = withPermission("services:read")(async (req: NextRequest) => {
-  const { searchParams } = new URL(req.url)
-  const isActive = searchParams.get("isActive")
-
-  const where = isActive !== null ? { isActive: isActive === "true" } : {}
-
-  const services = await prisma.v2_services.findMany({
-    where,
-    orderBy: { name: "asc" },
-  })
-
-  return Response.json(services)
-})
-
-export const POST = withPermission("services:create")(async (req: NextRequest) => {
-  const body = await req.json()
-  const { name, price, isActive = true } = body
-
+export async function GET() {
   try {
-    const service = await prisma.v2_services.create({
+    const services = await prisma.service.findMany({
+      orderBy: { name: "asc" },
+    })
+    // Convert Decimal to number for frontend consumption
+    const formattedServices = services.map((service) => ({
+      ...service,
+      price: service.price.toNumber(), // Ensure price is a number
+    }))
+    return NextResponse.json(formattedServices)
+  } catch (error) {
+    console.error("Error fetching services:", error)
+    return NextResponse.json({ message: "Failed to fetch services" }, { status: 500 })
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json()
+    const { name, price, isActive } = body
+
+    if (!name || price === undefined) {
+      return NextResponse.json({ message: "Name and price are required" }, { status: 400 })
+    }
+
+    const newService = await prisma.service.create({
       data: {
         name,
-        price,
-        isActive,
+        price: Number.parseFloat(price), // Ensure price is stored as Decimal
+        isActive: isActive ?? true,
       },
     })
-
-    return Response.json(service, { status: 201 })
+    return NextResponse.json(newService, { status: 201 })
   } catch (error) {
-    return Response.json({ error: "Erro ao criar serviço" }, { status: 500 })
+    console.error("Error creating service:", error)
+    return NextResponse.json({ message: "Failed to create service" }, { status: 500 })
   }
-})
+}

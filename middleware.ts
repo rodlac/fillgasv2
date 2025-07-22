@@ -1,38 +1,29 @@
-import type { NextRequest } from "next/server"
-import { createMiddlewareSupabaseClient } from "@/lib/supabase-middleware"
+import { NextResponse, type NextRequest } from "next/server"
+import { createSupabaseMiddlewareClient } from "@/lib/supabase-middleware"
 
 export async function middleware(request: NextRequest) {
-  const { supabase, supabaseResponse } = createMiddlewareSupabaseClient(request)
-
-  // Refresh session if expired - required for Server Components
-  await supabase.auth.getSession()
+  const response = NextResponse.next()
+  const supabase = createSupabaseMiddlewareClient(request, response)
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  // If user is not signed in and the current path is not /login redirect the user to /login
-  if (!user && !request.nextUrl.pathname.startsWith("/login")) {
-    return Response.redirect(new URL("/login", request.url))
+  const { pathname } = request.nextUrl
+
+  // Redirect authenticated users from /login to /dashboard
+  if (session && pathname === "/login") {
+    return NextResponse.redirect(new URL("/dashboard", request.url))
   }
 
-  // If user is signed in and the current path is /login redirect the user to /dashboard
-  if (user && request.nextUrl.pathname.startsWith("/login")) {
-    return Response.redirect(new URL("/dashboard", request.url))
+  // Protect dashboard routes
+  if (!session && pathname.startsWith("/dashboard")) {
+    return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  return supabaseResponse
+  return response
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 }

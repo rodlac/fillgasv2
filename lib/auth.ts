@@ -1,18 +1,15 @@
 import type { NextRequest } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase-server"
+import { createSupabaseServerClient } from "@/lib/supabase-server"
 
 export function withPermission(permission: string) {
   return (handler: (req: NextRequest, context?: any) => Promise<Response>) =>
     async (req: NextRequest, context?: any) => {
       try {
-        const supabase = await createServerSupabaseClient()
+        const supabase = createSupabaseServerClient()
 
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser()
+        const user = await getUser()
 
-        if (error || !user) {
+        if (!user) {
           return Response.json({ error: "Unauthorized" }, { status: 401 })
         }
 
@@ -25,4 +22,12 @@ export function withPermission(permission: string) {
         return Response.json({ error: "Internal server error" }, { status: 500 })
       }
     }
+}
+
+export async function getUser() {
+  const supabase = createSupabaseServerClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  return user
 }

@@ -93,7 +93,8 @@ export default function ServicesPage() {
               </Badge>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">R$ {service.price.toFixed(2)}</div>
+              <div className="text-2xl font-bold">R$ {Number(service.price).toFixed(2)}</div>{" "}
+              {/* Ensure price is number */}
               <div className="flex justify-end mt-4">
                 <Button variant="outline" size="sm" onClick={() => handleEdit(service)}>
                   <Edit className="h-4 w-4" />

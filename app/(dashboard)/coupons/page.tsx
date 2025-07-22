@@ -120,10 +120,12 @@ export default function CouponsPage() {
                   <TableCell className="font-medium">{coupon.code}</TableCell>
                   <TableCell>
                     {coupon.discountType === "percentage"
-                      ? `${coupon.discountValue}%`
-                      : `R$ ${coupon.discountValue.toFixed(2)}`}
+                      ? `${Number(coupon.discountValue).toFixed(0)}%` // Ensure discountValue is number
+                      : `R$ ${Number(coupon.discountValue).toFixed(2)}`}{" "}
+                    {/* Ensure discountValue is number */}
                   </TableCell>
-                  <TableCell>{coupon.minimumAmount ? `R$ ${coupon.minimumAmount.toFixed(2)}` : "-"}</TableCell>
+                  <TableCell>{coupon.minimumAmount ? `R$ ${Number(coupon.minimumAmount).toFixed(2)}` : "-"}</TableCell>{" "}
+                  {/* Ensure minimumAmount is number */}
                   <TableCell>
                     {coupon.currentUsage}/{coupon.maxUsage || "∞"}
                   </TableCell>

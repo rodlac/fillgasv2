@@ -209,7 +209,7 @@ export function BookingModal({ open, onClose, booking }: BookingModalProps) {
                     <SelectContent>
                       {services.map((svc: any) => (
                         <SelectItem key={svc.id} value={svc.id}>
-                          {svc.name} - R$ {svc.price.toFixed(2)}
+                          {svc.name} - R$ {Number(svc.price).toFixed(2)} {/* Ensure price is number */}
                         </SelectItem>
                       ))}
                     </SelectContent>

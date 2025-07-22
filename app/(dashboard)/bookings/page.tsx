@@ -6,51 +6,52 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search, Eye, Edit, Calendar } from "lucide-react"
+import { Plus, Search, Edit, Eye, Trash2 } from "lucide-react"
 import { BookingModal } from "@/components/booking-modal"
 import { BookingViewModal } from "@/components/booking-view-modal"
 import { useToast } from "@/hooks/use-toast"
 
 interface Booking {
   id: string
-  client: {
-    name: string
-    phone: string
-  }
+  clientId: string
+  client: { name: string }
   deliveryAddress: string
   deliveryDate: string
-  status: string
-  amount: number
   paymentMethod: string
+  status: string
+  totalPrice: number
   createdAt: string
+  bookingServices: Array<{
+    id: string
+    quantity: number
+    service: {
+      id: string
+      name: string
+      price: number
+    }
+  }>
 }
 
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [showModal, setShowModal] = useState(false)
+  const [showCreateEditModal, setShowCreateEditModal] = useState(false)
   const [showViewModal, setShowViewModal] = useState(false)
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const { toast } = useToast()
 
   const fetchBookings = async () => {
     try {
-      const params = new URLSearchParams()
-      if (statusFilter !== "all") params.append("status", statusFilter)
-
-      const response = await fetch(`/api/bookings?${params}`)
+      const response = await fetch("/api/bookings")
       const data = await response.json()
-
-      const filteredBookings = data.bookings.filter(
-        (booking: Booking) =>
-          booking.client.name.toLowerCase().includes(search.toLowerCase()) ||
-          booking.deliveryAddress.toLowerCase().includes(search.toLowerCase()),
+      setBookings(
+        data.filter(
+          (booking: Booking) =>
+            booking.client.name.toLowerCase().includes(search.toLowerCase()) ||
+            booking.deliveryAddress.toLowerCase().includes(search.toLowerCase()),
+        ),
       )
-
-      setBookings(filteredBookings)
     } catch (error) {
       toast({
         title: "Erro",
@@ -64,53 +65,47 @@ export default function BookingsPage() {
 
   useEffect(() => {
     fetchBookings()
-  }, [search, statusFilter])
+  }, [search])
+
+  const handleCreate = () => {
+    setSelectedBooking(null)
+    setShowCreateEditModal(true)
+  }
+
+  const handleEdit = (booking: Booking) => {
+    setSelectedBooking(booking)
+    setShowCreateEditModal(true)
+  }
 
   const handleView = (booking: Booking) => {
     setSelectedBooking(booking)
     setShowViewModal(true)
   }
 
-  const handleEdit = (booking: Booking) => {
-    setSelectedBooking(booking)
-    setShowModal(true)
+  const handleDelete = async (id: string) => {
+    if (confirm("Tem certeza que deseja excluir este agendamento?")) {
+      try {
+        await fetch(`/api/bookings/${id}`, { method: "DELETE" })
+        toast({
+          title: "Sucesso",
+          description: "Agendamento excluído com sucesso",
+        })
+        fetchBookings()
+      } catch (error) {
+        toast({
+          title: "Erro",
+          description: "Erro ao excluir agendamento",
+          variant: "destructive",
+        })
+      }
+    }
   }
 
   const handleModalClose = () => {
-    setShowModal(false)
+    setShowCreateEditModal(false)
     setShowViewModal(false)
     setSelectedBooking(null)
     fetchBookings()
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "confirmed":
-        return "default"
-      case "pending":
-        return "secondary"
-      case "delivered":
-        return "outline"
-      case "cancelled":
-        return "destructive"
-      default:
-        return "secondary"
-    }
-  }
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "confirmed":
-        return "Confirmado"
-      case "pending":
-        return "Pendente"
-      case "delivered":
-        return "Entregue"
-      case "cancelled":
-        return "Cancelado"
-      default:
-        return status
-    }
   }
 
   if (loading) {
@@ -122,40 +117,27 @@ export default function BookingsPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Agendamentos</h1>
-          <p className="text-gray-600">Gerencie todos os agendamentos</p>
+          <p className="text-gray-600">Gerencie todos os agendamentos de entregas</p>
         </div>
-        <Button onClick={() => setShowModal(true)}>
+        <Button onClick={handleCreate}>
           <Plus className="mr-2 h-4 w-4" />
           Novo Agendamento
         </Button>
       </div>
 
+      <div className="flex items-center space-x-2">
+        <Search className="h-4 w-4 text-gray-400" />
+        <Input
+          placeholder="Buscar agendamentos por cliente ou endereço..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-sm"
+        />
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Lista de Agendamentos</CardTitle>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <Search className="h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Buscar por cliente ou endereço..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="max-w-sm"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filtrar por status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="pending">Pendente</SelectItem>
-                <SelectItem value="confirmed">Confirmado</SelectItem>
-                <SelectItem value="delivered">Entregue</SelectItem>
-                <SelectItem value="cancelled">Cancelado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -164,33 +146,23 @@ export default function BookingsPage() {
                 <TableHead>Cliente</TableHead>
                 <TableHead>Endereço</TableHead>
                 <TableHead>Data</TableHead>
+                <TableHead>Método Pag.</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Valor</TableHead>
-                <TableHead>Pagamento</TableHead>
+                <TableHead>Total</TableHead>
                 <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {bookings.map((booking) => (
                 <TableRow key={booking.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{booking.client.name}</div>
-                      <div className="text-sm text-gray-500">{booking.client.phone}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="max-w-xs truncate">{booking.deliveryAddress}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center">
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {new Date(booking.deliveryDate).toLocaleDateString()}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusColor(booking.status)}>{getStatusLabel(booking.status)}</Badge>
-                  </TableCell>
-                  <TableCell>R$ {booking.amount.toFixed(2)}</TableCell>
+                  <TableCell className="font-medium">{booking.client.name}</TableCell>
+                  <TableCell>{booking.deliveryAddress}</TableCell>
+                  <TableCell>{new Date(booking.deliveryDate).toLocaleDateString()}</TableCell>
                   <TableCell>{booking.paymentMethod}</TableCell>
+                  <TableCell>
+                    <Badge>{booking.status}</Badge>
+                  </TableCell>
+                  <TableCell>R$ {Number(booking.totalPrice).toFixed(2)}</TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
                       <Button variant="outline" size="sm" onClick={() => handleView(booking)}>
@@ -198,6 +170,9 @@ export default function BookingsPage() {
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => handleEdit(booking)}>
                         <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleDelete(booking.id)}>
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
@@ -208,7 +183,7 @@ export default function BookingsPage() {
         </CardContent>
       </Card>
 
-      <BookingModal open={showModal} onClose={handleModalClose} booking={selectedBooking} />
+      <BookingModal open={showCreateEditModal} onClose={handleModalClose} booking={selectedBooking} />
       <BookingViewModal open={showViewModal} onClose={handleModalClose} booking={selectedBooking} />
     </div>
   )

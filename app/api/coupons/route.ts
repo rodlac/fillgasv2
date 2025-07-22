@@ -1,25 +1,49 @@
-import type { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { withPermission } from "@/lib/auth"
+import { NextResponse } from "next/server"
 
-export const GET = withPermission("coupons:read")(async (req: NextRequest) => {
-  const coupons = await prisma.v2_coupons.findMany({
-    orderBy: { createdAt: "desc" },
-  })
-
-  return Response.json(coupons)
-})
-
-export const POST = withPermission("coupons:create")(async (req: NextRequest) => {
-  const body = await req.json()
-
+export async function GET() {
   try {
-    const coupon = await prisma.v2_coupons.create({
-      data: body,
+    const coupons = await prisma.coupon.findMany({
+      orderBy: { createdAt: "desc" },
     })
-
-    return Response.json(coupon, { status: 201 })
+    // Convert Decimal to number for frontend consumption
+    const formattedCoupons = coupons.map((coupon) => ({
+      ...coupon,
+      discountValue: coupon.discountValue.toNumber(),
+      minimumAmount: coupon.minimumAmount?.toNumber() || null, // Handle optional minimumAmount
+    }))
+    return NextResponse.json(formattedCoupons)
   } catch (error) {
-    return Response.json({ error: "Erro ao criar cupom" }, { status: 500 })
+    console.error("Error fetching coupons:", error)
+    return NextResponse.json({ message: "Failed to fetch coupons" }, { status: 500 })
   }
-})
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json()
+    const { code, discountType, discountValue, minimumAmount, maxUsage, validFrom, validUntil, isActive } = body
+
+    if (!code || !discountType || discountValue === undefined || !validFrom || !validUntil) {
+      return NextResponse.json({ message: "Missing required fields" }, { status: 400 })
+    }
+
+    const newCoupon = await prisma.coupon.create({
+      data: {
+        code,
+        discountType,
+        discountValue: Number.parseFloat(discountValue),
+        minimumAmount: minimumAmount ? Number.parseFloat(minimumAmount) : null,
+        maxUsage: maxUsage ? Number.parseInt(maxUsage) : null,
+        validFrom: new Date(validFrom),
+        validUntil: new Date(validUntil),
+        isActive: isActive ?? true,
+        currentUsage: 0,
+      },
+    })
+    return NextResponse.json(newCoupon, { status: 201 })
+  } catch (error) {
+    console.error("Error creating coupon:", error)
+    return NextResponse.json({ message: "Failed to create coupon" }, { status: 500 })
+  }
+}

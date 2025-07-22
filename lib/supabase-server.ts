@@ -1,24 +1,34 @@
-import { createServerClient } from "@supabase/ssr"
+import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+export function createSupabaseServerClient() {
+  const cookieStore = cookies()
 
-export const createServerSupabaseClient = async () => {
-  const cookieStore = await cookies()
-
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     cookies: {
-      getAll() {
-        return cookieStore.getAll()
+      get(name: string) {
+        return cookieStore.get(name)?.value
       },
-      setAll(cookiesToSet) {
+      set(name: string, value: string, options: CookieOptions) {
         try {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-        } catch {
-          // The `setAll` method was called from a Server Component.
-          // This can be ignored if you have middleware refreshing
-          // user sessions.
+          cookieStore.set({ name, value, ...options })
+        } catch (error) {
+          // The `cookies().set()` method can only be called from a Server Component or Route Handler.
+          // This error is typically caused by an attempt to set a cookie from a Client Component.
+          // Many of the Supabase client methods are Server Actions, and they often set cookies.
+          // If you are calling these methods from a Client Component, make sure to wrap them in a Server Action.
+          console.warn("Failed to set cookie from server client:", error)
+        }
+      },
+      remove(name: string, options: CookieOptions) {
+        try {
+          cookieStore.set({ name, value: "", ...options })
+        } catch (error) {
+          // The `cookies().delete()` method can only be called from a Server Component or Route Handler.
+          // This error is typically caused by an attempt to delete a cookie from a Client Component.
+          // Many of the Supabase client methods are Server Actions, and they often delete cookies.
+          // If you are calling these methods from a Client Component, make sure to wrap them in a Server Action.
+          console.warn("Failed to remove cookie from server client:", error)
         }
       },
     },

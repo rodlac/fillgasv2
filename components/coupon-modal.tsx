@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 
 interface CouponModalProps {
@@ -40,8 +40,8 @@ export function CouponModal({ open, onClose, coupon }: CouponModalProps) {
           discountValue: coupon.discountValue || 0,
           minimumAmount: coupon.minimumAmount || 0,
           maxUsage: coupon.maxUsage || 0,
-          validFrom: coupon.validFrom?.split("T")[0] || "",
-          validUntil: coupon.validUntil?.split("T")[0] || "",
+          validFrom: coupon.validFrom ? new Date(coupon.validFrom).toISOString().split("T")[0] : "",
+          validUntil: coupon.validUntil ? new Date(coupon.validUntil).toISOString().split("T")[0] : "",
           isActive: coupon.isActive ?? true,
         })
       } else {
@@ -101,7 +101,7 @@ export function CouponModal({ open, onClose, coupon }: CouponModalProps) {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="code">Código</Label>
+            <Label htmlFor="code">Código do Cupom</Label>
             <Input
               id="code"
               value={formData.code}
@@ -118,7 +118,7 @@ export function CouponModal({ open, onClose, coupon }: CouponModalProps) {
                 onValueChange={(value) => setFormData((prev) => ({ ...prev, discountType: value }))}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="percentage">Percentual</SelectItem>
@@ -127,7 +127,7 @@ export function CouponModal({ open, onClose, coupon }: CouponModalProps) {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="discountValue">Valor {formData.discountType === "percentage" ? "(%)" : "(R$)"}</Label>
+              <Label htmlFor="discountValue">Valor do Desconto</Label>
               <Input
                 id="discountValue"
                 type="number"
@@ -141,7 +141,7 @@ export function CouponModal({ open, onClose, coupon }: CouponModalProps) {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="minimumAmount">Valor Mínimo (R$)</Label>
+              <Label htmlFor="minimumAmount">Valor Mínimo (opcional)</Label>
               <Input
                 id="minimumAmount"
                 type="number"
@@ -151,7 +151,7 @@ export function CouponModal({ open, onClose, coupon }: CouponModalProps) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="maxUsage">Limite de Uso</Label>
+              <Label htmlFor="maxUsage">Uso Máximo (0 para ilimitado)</Label>
               <Input
                 id="maxUsage"
                 type="number"
@@ -185,10 +185,10 @@ export function CouponModal({ open, onClose, coupon }: CouponModalProps) {
           </div>
 
           <div className="flex items-center space-x-2">
-            <Switch
+            <Checkbox
               id="isActive"
               checked={formData.isActive}
-              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, isActive: checked }))}
+              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, isActive: Boolean(checked) }))}
             />
             <Label htmlFor="isActive">Ativo</Label>
           </div>

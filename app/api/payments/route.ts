@@ -1,18 +1,9 @@
-import type { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { withPermission } from "@/lib/auth"
+import { NextResponse } from "next/server"
 
-export const GET = withPermission("payments:read")(async (req: NextRequest) => {
-  const { searchParams } = new URL(req.url)
-  const status = searchParams.get("status")
-  const limit = Number.parseInt(searchParams.get("limit") || "10")
-  const offset = Number.parseInt(searchParams.get("offset") || "0")
-
-  const where = status ? { status } : {}
-
-  const [payments, total] = await Promise.all([
-    prisma.v2_payments.findMany({
-      where,
+export async function GET() {
+  try {
+    const payments = await prisma.payment.findMany({
       include: {
         booking: {
           include: {
@@ -21,11 +12,47 @@ export const GET = withPermission("payments:read")(async (req: NextRequest) => {
         },
       },
       orderBy: { createdAt: "desc" },
-      take: limit,
-      skip: offset,
-    }),
-    prisma.v2_payments.count({ where }),
-  ])
+    })
 
-  return Response.json({ payments, total })
-})
+    const formattedPayments = payments.map((payment) => ({
+      ...payment,
+      amount: payment.amount.toNumber(),
+      discountAmount: payment.discountAmount?.toNumber() || null,
+      finalAmount: payment.finalAmount.toNumber(),
+    }))
+
+    return NextResponse.json(formattedPayments)
+  } catch (error) {
+    console.error("Error fetching payments:", error)
+    return NextResponse.json({ message: "Failed to fetch payments" }, { status: 500 })
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json()
+    const { bookingId, amount, discountAmount, finalAmount, paymentMethod, status, transactionId, proofOfPaymentUrl } =
+      body
+
+    if (!bookingId || amount === undefined || finalAmount === undefined || !paymentMethod || !status) {
+      return NextResponse.json({ message: "Missing required fields" }, { status: 400 })
+    }
+
+    const newPayment = await prisma.payment.create({
+      data: {
+        bookingId,
+        amount: Number.parseFloat(amount),
+        discountAmount: discountAmount ? Number.parseFloat(discountAmount) : null,
+        finalAmount: Number.parseFloat(finalAmount),
+        paymentMethod,
+        status,
+        transactionId,
+        proofOfPaymentUrl,
+      },
+    })
+    return NextResponse.json(newPayment, { status: 201 })
+  } catch (error) {
+    console.error("Error creating payment:", error)
+    return NextResponse.json({ message: "Failed to create payment" }, { status: 500 })
+  }
+}
